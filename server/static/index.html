@@ -4,495 +4,621 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>AI Audit Logger</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <style>
-    body { background: #0f1117; color: #e2e8f0; }
-    .card { background: #1a1d2e; border: 1px solid #2d3148; }
-    .badge-openai { background: #10a37f22; color: #10a37f; }
-    .badge-anthropic { background: #d97b4522; color: #e8945a; }
-    .badge-gemini { background: #4285f422; color: #74a8ff; }
-    .badge-other { background: #6366f122; color: #818cf8; }
-    .badge-error { background: #ef444422; color: #f87171; }
-    .badge-ok { background: #22c55e22; color: #4ade80; }
-    .tab-active { border-bottom: 2px solid #6366f1; color: white; }
-    .tab-inactive { border-bottom: 2px solid transparent; color: #64748b; }
-    .tab-inactive:hover { color: #94a3b8; }
-    input[type=text], input[type=password] {
-      background: #0f1117;
-      border: 1px solid #2d3148;
+    * { font-family: 'Inter', sans-serif; }
+    body { background: #060911; color: #e2e8f0; }
+
+    .card {
+      background: linear-gradient(135deg, #0d1225 0%, #0a0f1e 100%);
+      border: 1px solid rgba(99, 102, 241, 0.12);
+      border-radius: 12px;
+    }
+    .card:hover { border-color: rgba(99, 102, 241, 0.25); transition: border-color 0.2s; }
+
+    .stat-card {
+      background: linear-gradient(135deg, #0d1225 0%, #0a0f1e 100%);
+      border: 1px solid rgba(99, 102, 241, 0.15);
+      border-radius: 12px;
+      position: relative;
+      overflow: hidden;
+      transition: transform 0.2s, border-color 0.2s, box-shadow 0.2s;
+    }
+    .stat-card:hover {
+      transform: translateY(-2px);
+      border-color: rgba(99, 102, 241, 0.4);
+      box-shadow: 0 8px 32px rgba(99, 102, 241, 0.1);
+    }
+    .stat-card::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 1px;
+      background: linear-gradient(90deg, transparent, rgba(99,102,241,0.5), transparent);
+    }
+
+    .glow-green { box-shadow: 0 0 20px rgba(16, 185, 129, 0.08); }
+    .glow-blue  { box-shadow: 0 0 20px rgba(96, 165, 250, 0.08); }
+    .glow-purple{ box-shadow: 0 0 20px rgba(168, 85, 247, 0.08); }
+    .glow-indigo{ box-shadow: 0 0 20px rgba(99, 102, 241, 0.08); }
+
+    .badge { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 500; }
+    .badge-openai    { background: rgba(16, 163, 127, 0.15); color: #34d399; border: 1px solid rgba(16,163,127,0.2); }
+    .badge-anthropic { background: rgba(217, 123, 69, 0.15); color: #fb923c; border: 1px solid rgba(217,123,69,0.2); }
+    .badge-gemini    { background: rgba(66, 133, 244, 0.15); color: #60a5fa; border: 1px solid rgba(66,133,244,0.2); }
+    .badge-other     { background: rgba(99, 102, 241, 0.15); color: #a5b4fc; border: 1px solid rgba(99,102,241,0.2); }
+    .badge-ok        { background: rgba(34, 197, 94, 0.12); color: #4ade80; border: 1px solid rgba(34,197,94,0.2); }
+    .badge-error     { background: rgba(239, 68, 68, 0.12); color: #f87171; border: 1px solid rgba(239,68,68,0.2); }
+
+    .tab-btn {
+      padding: 12px 0;
+      font-size: 12px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      border-bottom: 2px solid transparent;
+      color: #475569;
+      transition: color 0.2s, border-color 0.2s;
+      cursor: pointer;
+      background: none;
+      border-top: none;
+      border-left: none;
+      border-right: none;
+    }
+    .tab-btn:hover { color: #94a3b8; }
+    .tab-btn.active { color: #a5b4fc; border-bottom-color: #6366f1; }
+
+    .btn {
+      padding: 6px 14px;
+      border-radius: 8px;
+      font-size: 12px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s;
+      border: 1px solid;
+    }
+    .btn-ghost { background: transparent; border-color: rgba(99,102,241,0.2); color: #94a3b8; }
+    .btn-ghost:hover { border-color: rgba(99,102,241,0.5); color: #e2e8f0; background: rgba(99,102,241,0.05); }
+    .btn-primary { background: #6366f1; border-color: #6366f1; color: white; }
+    .btn-primary:hover { background: #5558e8; }
+    .btn-success { background: rgba(16,185,129,0.1); border-color: rgba(16,185,129,0.3); color: #34d399; }
+    .btn-success:hover { background: rgba(16,185,129,0.2); }
+
+    select, input[type=text], input[type=password] {
+      background: rgba(13, 18, 37, 0.8);
+      border: 1px solid rgba(99, 102, 241, 0.15);
       color: #e2e8f0;
-      border-radius: 6px;
+      border-radius: 8px;
       padding: 6px 10px;
       font-size: 12px;
       outline: none;
-      font-family: monospace;
+      font-family: 'Inter', sans-serif;
+      transition: border-color 0.2s;
     }
-    input[type=text]:focus, input[type=password]:focus { border-color: #6366f1; }
-    ::-webkit-scrollbar { width: 6px; }
-    ::-webkit-scrollbar-track { background: #1a1d2e; }
-    ::-webkit-scrollbar-thumb { background: #2d3148; border-radius: 3px; }
-    .copy-btn { cursor: pointer; }
-    .copy-btn:hover { opacity: 0.7; }
+    select:focus, input:focus { border-color: rgba(99,102,241,0.5); }
+
+    table th { font-weight: 500; font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; }
+    tbody tr { transition: background 0.15s; }
+    tbody tr:hover { background: rgba(99, 102, 241, 0.05); }
+
+    .pulse-dot {
+      width: 8px; height: 8px; border-radius: 50%;
+      background: #10b981;
+      box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.5);
+      animation: pulse-ring 2s infinite;
+    }
+    @keyframes pulse-ring {
+      0%   { box-shadow: 0 0 0 0 rgba(16,185,129,0.5); }
+      70%  { box-shadow: 0 0 0 6px rgba(16,185,129,0); }
+      100% { box-shadow: 0 0 0 0 rgba(16,185,129,0); }
+    }
+
+    .gradient-text {
+      background: linear-gradient(135deg, #a5b4fc, #818cf8);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    pre, code { font-family: 'JetBrains Mono', 'Fira Code', monospace; }
+    pre { background: #060911; border: 1px solid rgba(99,102,241,0.1); border-radius: 8px; padding: 14px; font-size: 12px; line-height: 1.6; overflow-x: auto; color: #94a3b8; }
+    pre .kw { color: #a5b4fc; }
+    pre .str { color: #86efac; }
+    pre .cm { color: #475569; }
+
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: rgba(99,102,241,0.2); border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: rgba(99,102,241,0.4); }
+
+    .number-animate { transition: all 0.4s ease; }
+
+    #toast {
+      position: fixed; bottom: 24px; right: 24px;
+      background: linear-gradient(135deg, #1e2235, #161929);
+      border: 1px solid rgba(99,102,241,0.3);
+      color: #e2e8f0; font-size: 12px;
+      padding: 10px 16px; border-radius: 8px;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+      z-index: 100; display: none;
+    }
   </style>
 </head>
-<body class="min-h-screen font-mono text-sm">
+<body class="min-h-screen">
 
   <!-- Header -->
-  <div class="border-b border-slate-800 px-6 py-4 flex items-center justify-between">
+  <div style="background: linear-gradient(180deg, rgba(99,102,241,0.06) 0%, transparent 100%); border-bottom: 1px solid rgba(99,102,241,0.1);" class="px-6 py-4 flex items-center justify-between">
     <div class="flex items-center gap-3">
-      <div class="w-2 h-2 rounded-full bg-green-400 animate-pulse"></div>
-      <span class="text-white font-semibold text-base">AI Audit Logger</span>
+      <div class="pulse-dot"></div>
+      <span class="font-semibold text-white text-base tracking-tight">AI Audit Logger</span>
+      <span class="text-xs px-2 py-0.5 rounded-full text-indigo-400" style="background: rgba(99,102,241,0.1); border: 1px solid rgba(99,102,241,0.2);">v0.1.0</span>
     </div>
-    <div class="flex items-center gap-4 text-slate-400 text-xs">
-      <span id="last-updated">—</span>
-      <button onclick="refresh()" class="px-3 py-1 rounded border border-slate-700 hover:border-slate-500 hover:text-white transition-colors">Refresh</button>
+    <div class="flex items-center gap-3">
+      <span id="last-updated" class="text-slate-500 text-xs"></span>
+      <button onclick="refresh()" class="btn btn-ghost">↻ Refresh</button>
     </div>
   </div>
 
   <!-- Tabs -->
-  <div class="border-b border-slate-800 px-6 flex gap-6">
-    <button onclick="showTab('dashboard')" id="tab-dashboard" class="py-3 text-xs font-semibold uppercase tracking-wider tab-active transition-colors">Dashboard</button>
-    <button onclick="showTab('proxy')" id="tab-proxy" class="py-3 text-xs font-semibold uppercase tracking-wider tab-inactive transition-colors">Proxy Setup</button>
-    <button onclick="showTab('settings')" id="tab-settings" class="py-3 text-xs font-semibold uppercase tracking-wider tab-inactive transition-colors">Settings</button>
+  <div class="px-6 flex gap-6" style="border-bottom: 1px solid rgba(99,102,241,0.1);">
+    <button onclick="showTab('dashboard')" id="tab-dashboard" class="tab-btn active">Dashboard</button>
+    <button onclick="showTab('proxy')" id="tab-proxy" class="tab-btn">Proxy Setup</button>
+    <button onclick="showTab('settings')" id="tab-settings" class="tab-btn">Settings</button>
   </div>
 
-  <!-- ── DASHBOARD TAB ──────────────────────────────────────────────── -->
-  <div id="page-dashboard" class="p-6 space-y-6 max-w-7xl mx-auto">
+  <!-- ── DASHBOARD ─────────────────────────────────────────────────── -->
+  <div id="page-dashboard" class="p-6 space-y-5 max-w-7xl mx-auto">
 
     <!-- Stat Cards -->
     <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
-      <div class="card rounded-lg p-4">
-        <div class="text-slate-400 text-xs mb-1">Total Calls</div>
-        <div id="stat-calls" class="text-2xl font-bold text-white">—</div>
+      <div class="stat-card glow-indigo p-5">
+        <div class="flex items-center justify-between mb-3">
+          <span class="text-slate-500 text-xs font-medium uppercase tracking-wider">Total Calls</span>
+          <span class="text-2xl opacity-40">📡</span>
+        </div>
+        <div id="stat-calls" class="text-3xl font-bold text-white number-animate">—</div>
       </div>
-      <div class="card rounded-lg p-4">
-        <div class="text-slate-400 text-xs mb-1">Total Cost</div>
-        <div id="stat-cost" class="text-2xl font-bold text-green-400">—</div>
+      <div class="stat-card glow-green p-5">
+        <div class="flex items-center justify-between mb-3">
+          <span class="text-slate-500 text-xs font-medium uppercase tracking-wider">Total Cost</span>
+          <span class="text-2xl opacity-40">💰</span>
+        </div>
+        <div id="stat-cost" class="text-3xl font-bold text-emerald-400 number-animate">—</div>
       </div>
-      <div class="card rounded-lg p-4">
-        <div class="text-slate-400 text-xs mb-1">Avg Latency</div>
-        <div id="stat-latency" class="text-2xl font-bold text-blue-400">—</div>
+      <div class="stat-card glow-blue p-5">
+        <div class="flex items-center justify-between mb-3">
+          <span class="text-slate-500 text-xs font-medium uppercase tracking-wider">Avg Latency</span>
+          <span class="text-2xl opacity-40">⚡</span>
+        </div>
+        <div id="stat-latency" class="text-3xl font-bold text-blue-400 number-animate">—</div>
       </div>
-      <div class="card rounded-lg p-4">
-        <div class="text-slate-400 text-xs mb-1">Total Tokens</div>
-        <div id="stat-tokens" class="text-2xl font-bold text-purple-400">—</div>
+      <div class="stat-card glow-purple p-5">
+        <div class="flex items-center justify-between mb-3">
+          <span class="text-slate-500 text-xs font-medium uppercase tracking-wider">Total Tokens</span>
+          <span class="text-2xl opacity-40">🔢</span>
+        </div>
+        <div id="stat-tokens" class="text-3xl font-bold text-purple-400 number-animate">—</div>
       </div>
     </div>
 
     <!-- Charts -->
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
-      <div class="card rounded-lg p-4">
-        <div class="text-slate-300 text-xs font-semibold mb-4 uppercase tracking-wider">Calls by Model</div>
-        <canvas id="chart-models" height="180"></canvas>
+      <div class="card p-5">
+        <div class="text-slate-400 text-xs font-semibold uppercase tracking-wider mb-4">Calls by Model</div>
+        <canvas id="chart-models" height="175"></canvas>
       </div>
-      <div class="card rounded-lg p-4">
-        <div class="text-slate-300 text-xs font-semibold mb-4 uppercase tracking-wider">Cost by Model (USD)</div>
-        <canvas id="chart-cost" height="180"></canvas>
+      <div class="card p-5">
+        <div class="text-slate-400 text-xs font-semibold uppercase tracking-wider mb-4">Cost by Model (USD)</div>
+        <canvas id="chart-cost" height="175"></canvas>
       </div>
     </div>
 
-    <!-- Filters + Export -->
-    <div class="card rounded-lg p-4">
-      <div class="flex flex-wrap gap-3 items-center">
-        <span class="text-slate-400 text-xs uppercase tracking-wider">Filter:</span>
-        <select id="filter-provider" onchange="applyFilters()" class="bg-slate-800 border border-slate-700 rounded px-2 py-1 text-xs text-slate-300 focus:outline-none">
+    <!-- Filter bar -->
+    <div class="card p-4">
+      <div class="flex flex-wrap gap-2 items-center">
+        <span class="text-slate-500 text-xs uppercase tracking-wider font-medium mr-1">Filter</span>
+        <select id="filter-provider" onchange="applyFilters()">
           <option value="">All Providers</option>
           <option value="openai">OpenAI</option>
           <option value="anthropic">Anthropic</option>
           <option value="gemini">Gemini</option>
         </select>
-        <input id="filter-model" oninput="applyFilters()" placeholder="Model..." class="bg-slate-800 border border-slate-700 rounded px-2 py-1 text-xs text-slate-300 focus:outline-none w-36" />
-        <input id="filter-user" oninput="applyFilters()" placeholder="User ID..." class="bg-slate-800 border border-slate-700 rounded px-2 py-1 text-xs text-slate-300 focus:outline-none w-36" />
-        <input id="filter-app" oninput="applyFilters()" placeholder="App name..." class="bg-slate-800 border border-slate-700 rounded px-2 py-1 text-xs text-slate-300 focus:outline-none w-36" />
-        <button onclick="clearFilters()" class="text-xs text-slate-500 hover:text-slate-300 transition-colors">Clear</button>
-        <span id="filter-count" class="text-xs text-slate-500"></span>
+        <input id="filter-model" oninput="applyFilters()" placeholder="Model…" style="width:130px" />
+        <input id="filter-user" oninput="applyFilters()" placeholder="User ID…" style="width:130px" />
+        <input id="filter-app" oninput="applyFilters()" placeholder="App name…" style="width:130px" />
+        <button onclick="clearFilters()" class="text-xs text-slate-600 hover:text-slate-400 transition-colors">✕ Clear</button>
+        <span id="filter-count" class="text-xs text-slate-600 ml-1"></span>
         <div class="ml-auto flex gap-2">
-          <a href="/api/v1/logs/export?format=csv" class="px-3 py-1 rounded border border-slate-700 hover:border-green-500 hover:text-green-400 text-xs transition-colors">↓ CSV</a>
-          <a href="/api/v1/logs/export?format=jsonl" class="px-3 py-1 rounded border border-slate-700 hover:border-blue-500 hover:text-blue-400 text-xs transition-colors">↓ JSONL</a>
+          <a href="/api/v1/logs/export?format=csv"  class="btn btn-success">↓ CSV</a>
+          <a href="/api/v1/logs/export?format=jsonl" class="btn btn-ghost">↓ JSONL</a>
         </div>
       </div>
     </div>
 
     <!-- Log Table -->
-    <div class="card rounded-lg overflow-hidden">
-      <div class="px-4 py-3 border-b border-slate-800 flex items-center justify-between">
+    <div class="card overflow-hidden">
+      <div class="px-5 py-3 flex items-center justify-between" style="border-bottom: 1px solid rgba(99,102,241,0.1);">
         <span class="text-slate-300 text-xs font-semibold uppercase tracking-wider">Recent Calls</span>
-        <span class="text-slate-500 text-xs">click a row for full detail</span>
+        <span class="text-slate-600 text-xs">click any row for full detail</span>
       </div>
       <div class="overflow-x-auto">
         <table class="w-full text-xs">
           <thead>
-            <tr class="text-slate-500 border-b border-slate-800">
-              <th class="text-left px-4 py-2 font-normal">Timestamp</th>
-              <th class="text-left px-4 py-2 font-normal">Provider</th>
-              <th class="text-left px-4 py-2 font-normal">Model</th>
-              <th class="text-left px-4 py-2 font-normal">User</th>
-              <th class="text-right px-4 py-2 font-normal">Tokens</th>
-              <th class="text-right px-4 py-2 font-normal">Cost</th>
-              <th class="text-right px-4 py-2 font-normal">Latency</th>
-              <th class="text-center px-4 py-2 font-normal">Status</th>
+            <tr class="text-slate-600" style="border-bottom: 1px solid rgba(99,102,241,0.08);">
+              <th class="text-left px-5 py-3">Timestamp</th>
+              <th class="text-left px-4 py-3">Provider</th>
+              <th class="text-left px-4 py-3">Model</th>
+              <th class="text-left px-4 py-3">User</th>
+              <th class="text-right px-4 py-3">Tokens</th>
+              <th class="text-right px-4 py-3">Cost</th>
+              <th class="text-right px-4 py-3">Latency</th>
+              <th class="text-center px-4 py-3">Status</th>
             </tr>
           </thead>
           <tbody id="log-table-body">
-            <tr><td colspan="8" class="px-4 py-8 text-center text-slate-600">Loading...</td></tr>
+            <tr><td colspan="8" class="px-5 py-12 text-center text-slate-700">Loading…</td></tr>
           </tbody>
         </table>
       </div>
     </div>
   </div>
 
-  <!-- ── PROXY SETUP TAB ───────────────────────────────────────────── -->
-  <div id="page-proxy" class="hidden p-6 max-w-4xl mx-auto space-y-6">
+  <!-- ── PROXY SETUP ────────────────────────────────────────────────── -->
+  <div id="page-proxy" class="hidden p-6 max-w-3xl mx-auto space-y-5">
 
-    <div class="card rounded-lg p-5">
-      <div class="text-white font-semibold mb-2">Zero-code integration</div>
-      <div class="text-slate-400 text-xs leading-relaxed">
-        Instead of changing your application code, point your AI client to these proxy URLs.
-        Every call gets logged automatically — no SDK installation required.
-        <br/><br/>
-        Configure your API keys in the <button onclick="showTab('settings')" class="text-indigo-400 hover:text-indigo-300 underline">Settings tab</button>, then use the URLs below.
-      </div>
+    <div class="card p-6">
+      <h2 class="text-white font-semibold text-base mb-2">Zero-code integration</h2>
+      <p class="text-slate-400 text-sm leading-relaxed">
+        Point your AI client at these proxy URLs instead of the provider's API.
+        Every call gets logged automatically — no SDK needed, no code changes in your app.
+        Configure keys in <button onclick="showTab('settings')" class="text-indigo-400 hover:text-indigo-300 underline">Settings</button>.
+      </p>
     </div>
 
-    <!-- OpenAI Proxy -->
-    <div class="card rounded-lg p-5">
-      <div class="flex items-center gap-2 mb-4">
-        <span class="px-2 py-0.5 rounded text-xs badge-openai">OpenAI</span>
-        <span class="text-white font-semibold">OpenAI Proxy</span>
+    <!-- OpenAI -->
+    <div class="card overflow-hidden">
+      <div class="px-5 py-3 flex items-center gap-3" style="background: rgba(16,163,127,0.05); border-bottom: 1px solid rgba(16,163,127,0.1);">
+        <span class="badge badge-openai">OpenAI</span>
+        <span class="text-slate-300 font-medium text-sm">OpenAI Proxy</span>
+        <span onclick="copy(this)" data-val="http://localhost:8000/proxy/openai/v1" class="ml-auto text-slate-600 hover:text-slate-400 text-xs cursor-pointer select-none">http://localhost:8000/proxy/openai/v1 📋</span>
       </div>
-      <div class="text-slate-400 text-xs mb-3">Change <code class="text-slate-300">base_url</code> in your OpenAI client:</div>
-      <pre class="bg-slate-900 rounded p-3 text-xs text-slate-300 overflow-x-auto mb-3">from openai import OpenAI
+      <pre class="rounded-none border-none m-0"><span class="kw">from</span> openai <span class="kw">import</span> OpenAI
 
 client = OpenAI(
-    base_url="http://localhost:8000/proxy/openai/v1",
-    api_key="your-openai-key"  # or leave empty if key is set in dashboard
+    base_url=<span class="str">"http://localhost:8000/proxy/openai/v1"</span>,
+    api_key=<span class="str">"your-key"</span>  <span class="cm"># or leave blank if key set in Settings</span>
 )
 
-# All calls now logged — no other changes needed
+<span class="cm"># All calls now logged — no other changes</span>
 response = client.chat.completions.create(
-    model="gpt-4o",
-    messages=[{"role": "user", "content": "Hello!"}]
+    model=<span class="str">"gpt-4o"</span>,
+    messages=[{<span class="str">"role"</span>: <span class="str">"user"</span>, <span class="str">"content"</span>: <span class="str">"Hello!"</span>}]
 )</pre>
-      <div class="text-slate-500 text-xs">Proxy URL: <span class="text-slate-300 copy-btn" onclick="copy(this)" data-val="http://localhost:8000/proxy/openai/v1">http://localhost:8000/proxy/openai/v1 📋</span></div>
     </div>
 
-    <!-- Anthropic Proxy -->
-    <div class="card rounded-lg p-5">
-      <div class="flex items-center gap-2 mb-4">
-        <span class="px-2 py-0.5 rounded text-xs badge-anthropic">Anthropic</span>
-        <span class="text-white font-semibold">Anthropic Proxy</span>
+    <!-- Anthropic -->
+    <div class="card overflow-hidden">
+      <div class="px-5 py-3 flex items-center gap-3" style="background: rgba(217,123,69,0.05); border-bottom: 1px solid rgba(217,123,69,0.1);">
+        <span class="badge badge-anthropic">Anthropic</span>
+        <span class="text-slate-300 font-medium text-sm">Anthropic Proxy</span>
+        <span onclick="copy(this)" data-val="http://localhost:8000/proxy/anthropic" class="ml-auto text-slate-600 hover:text-slate-400 text-xs cursor-pointer select-none">http://localhost:8000/proxy/anthropic 📋</span>
       </div>
-      <div class="text-slate-400 text-xs mb-3">Change <code class="text-slate-300">base_url</code> in your Anthropic client:</div>
-      <pre class="bg-slate-900 rounded p-3 text-xs text-slate-300 overflow-x-auto mb-3">from anthropic import Anthropic
+      <pre class="rounded-none border-none m-0"><span class="kw">from</span> anthropic <span class="kw">import</span> Anthropic
 
 client = Anthropic(
-    base_url="http://localhost:8000/proxy/anthropic",
-    api_key="your-anthropic-key"  # or leave empty if key is set in dashboard
+    base_url=<span class="str">"http://localhost:8000/proxy/anthropic"</span>,
+    api_key=<span class="str">"your-key"</span>
 )
 
 response = client.messages.create(
-    model="claude-sonnet-4-6",
-    max_tokens=1024,
-    messages=[{"role": "user", "content": "Hello!"}]
+    model=<span class="str">"claude-sonnet-4-6"</span>,
+    max_tokens=<span class="str">1024</span>,
+    messages=[{<span class="str">"role"</span>: <span class="str">"user"</span>, <span class="str">"content"</span>: <span class="str">"Hello!"</span>}]
 )</pre>
-      <div class="text-slate-500 text-xs">Proxy URL: <span class="text-slate-300 copy-btn" onclick="copy(this)" data-val="http://localhost:8000/proxy/anthropic">http://localhost:8000/proxy/anthropic 📋</span></div>
     </div>
 
-    <!-- Gemini Proxy -->
-    <div class="card rounded-lg p-5">
-      <div class="flex items-center gap-2 mb-4">
-        <span class="px-2 py-0.5 rounded text-xs badge-gemini">Gemini</span>
-        <span class="text-white font-semibold">Google Gemini Proxy</span>
+    <!-- Gemini -->
+    <div class="card overflow-hidden">
+      <div class="px-5 py-3 flex items-center gap-3" style="background: rgba(66,133,244,0.05); border-bottom: 1px solid rgba(66,133,244,0.1);">
+        <span class="badge badge-gemini">Gemini</span>
+        <span class="text-slate-300 font-medium text-sm">Google Gemini Proxy</span>
+        <span onclick="copy(this)" data-val="http://localhost:8000/proxy/gemini" class="ml-auto text-slate-600 hover:text-slate-400 text-xs cursor-pointer select-none">http://localhost:8000/proxy/gemini 📋</span>
       </div>
-      <div class="text-slate-400 text-xs mb-3">Use the proxy URL with the Google AI Python SDK:</div>
-      <pre class="bg-slate-900 rounded p-3 text-xs text-slate-300 overflow-x-auto mb-3">import google.generativeai as genai
-from ai_audit_logger import wrap
+      <pre class="rounded-none border-none m-0"><span class="kw">import</span> google.generativeai <span class="kw">as</span> genai
+<span class="kw">from</span> ai_audit_logger <span class="kw">import</span> wrap
 
-genai.configure(api_key="your-gemini-key")
-model = wrap(genai.GenerativeModel("gemini-1.5-flash"))
+genai.configure(api_key=<span class="str">"your-gemini-key"</span>)
+model = wrap(genai.GenerativeModel(<span class="str">"gemini-1.5-flash"</span>))
 
-response = model.generate_content("Hello!")
+response = model.generate_content(<span class="str">"Hello!"</span>)
 
-# Or direct HTTP (no SDK needed):
-# POST http://localhost:8000/proxy/gemini/v1beta/models/gemini-1.5-flash:generateContent</pre>
-      <div class="text-slate-500 text-xs">Proxy base: <span class="text-slate-300 copy-btn" onclick="copy(this)" data-val="http://localhost:8000/proxy/gemini">http://localhost:8000/proxy/gemini 📋</span></div>
+<span class="cm"># Or via HTTP proxy directly:</span>
+<span class="cm"># POST /proxy/gemini/v1beta/models/gemini-1.5-flash:generateContent</span></pre>
     </div>
 
-    <!-- Tag your calls -->
-    <div class="card rounded-lg p-5">
-      <div class="text-white font-semibold mb-3">Tag your calls (optional headers)</div>
-      <div class="text-slate-400 text-xs mb-3">Add these headers to any request to tag logs without touching your app code:</div>
-      <pre class="bg-slate-900 rounded p-3 text-xs text-slate-300 overflow-x-auto">x-app-name: my-chatbot
-x-user-id: user-123
+    <!-- Optional headers -->
+    <div class="card p-5">
+      <div class="text-slate-300 font-medium text-sm mb-3">Tag calls with optional headers</div>
+      <p class="text-slate-500 text-xs mb-3">Add to any proxy request to tag logs without changing your app logic:</p>
+      <pre>x-app-name:   my-chatbot
+x-user-id:    user-123
 x-session-id: session-abc</pre>
     </div>
   </div>
 
-  <!-- ── SETTINGS TAB ──────────────────────────────────────────────── -->
-  <div id="page-settings" class="hidden p-6 max-w-2xl mx-auto space-y-6">
+  <!-- ── SETTINGS ───────────────────────────────────────────────────── -->
+  <div id="page-settings" class="hidden p-6 max-w-2xl mx-auto space-y-5">
 
-    <!-- Security notice -->
-    <div class="rounded-lg p-4 border border-yellow-900/50 bg-yellow-900/10">
-      <div class="text-yellow-400 text-xs font-semibold mb-1">Security notice</div>
-      <div class="text-yellow-200/70 text-xs leading-relaxed">
-        Keys saved here are stored on <strong>your server only</strong> in a local config file.
-        They are never logged in the audit system and never sent to third parties.
-        For production deployments, prefer setting keys as environment variables
-        (<code>OPENAI_API_KEY</code>, <code>ANTHROPIC_API_KEY</code>, <code>GEMINI_API_KEY</code>).
-        Always use HTTPS in production.
-      </div>
+    <div class="rounded-xl p-4" style="background: rgba(234,179,8,0.06); border: 1px solid rgba(234,179,8,0.15);">
+      <div class="text-yellow-400 text-xs font-semibold mb-1">🔒 Security notice</div>
+      <p class="text-yellow-200/60 text-xs leading-relaxed">
+        Keys saved here are stored on <strong>your server only</strong> in a local config file. They are never logged or sent anywhere.
+        For production, prefer environment variables: <code class="text-yellow-200/80">OPENAI_API_KEY</code>, <code class="text-yellow-200/80">ANTHROPIC_API_KEY</code>, <code class="text-yellow-200/80">GEMINI_API_KEY</code>.
+        Always run behind HTTPS in production.
+      </p>
     </div>
 
-    <!-- Provider keys -->
     <div id="provider-cards" class="space-y-4">
-      <div class="text-slate-500 text-xs">Loading...</div>
+      <div class="text-slate-600 text-xs p-4">Loading…</div>
     </div>
 
-    <!-- Slack alerts -->
-    <div class="card rounded-lg p-5">
-      <div class="text-white font-semibold mb-3">Slack Alerts</div>
-      <div class="text-slate-400 text-xs mb-4 leading-relaxed">
-        Get notified when a single call costs more than a threshold or hourly spend spikes.
-        Set <code class="text-slate-300">SLACK_WEBHOOK_URL</code> in your <code class="text-slate-300">.env</code> file and restart the server.
-      </div>
-      <pre class="bg-slate-900 rounded p-3 text-xs text-slate-300">SLACK_WEBHOOK_URL=https://hooks.slack.com/services/...
+    <div class="card p-5">
+      <div class="text-slate-300 font-medium text-sm mb-2">🔔 Slack Alerts</div>
+      <p class="text-slate-500 text-xs leading-relaxed mb-3">Get notified when a single call or hourly spend exceeds a threshold.</p>
+      <pre>SLACK_WEBHOOK_URL=https://hooks.slack.com/services/...
 ALERT_COST_PER_CALL=0.50
 ALERT_HOURLY_COST=5.00</pre>
+      <p class="text-slate-600 text-xs mt-2">Set in your <code>.env</code> file and restart the server.</p>
     </div>
   </div>
 
   <!-- Detail Modal -->
-  <div id="modal" class="hidden fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4" onclick="closeModal(event)">
-    <div class="card rounded-lg p-6 max-w-2xl w-full max-h-[80vh] overflow-y-auto" onclick="event.stopPropagation()">
-      <div class="flex justify-between items-center mb-4">
+  <div id="modal" class="hidden fixed inset-0 flex items-center justify-center z-50 p-4" style="background: rgba(0,0,0,0.75); backdrop-filter: blur(4px);">
+    <div class="card p-6 max-w-2xl w-full max-h-[80vh] overflow-y-auto" style="box-shadow: 0 24px 80px rgba(0,0,0,0.6);">
+      <div class="flex justify-between items-center mb-5">
         <span class="text-white font-semibold">Call Detail</span>
-        <button onclick="document.getElementById('modal').classList.add('hidden')" class="text-slate-500 hover:text-white text-lg">✕</button>
+        <button onclick="document.getElementById('modal').classList.add('hidden')" class="text-slate-600 hover:text-white text-xl transition-colors">✕</button>
       </div>
-      <div id="modal-content" class="space-y-3"></div>
+      <div id="modal-content" class="space-y-2.5"></div>
     </div>
   </div>
 
-  <div id="toast" class="hidden fixed bottom-4 right-4 bg-slate-700 text-white text-xs px-4 py-2 rounded shadow-lg z-50"></div>
+  <div id="toast"></div>
 
   <script>
     let allEntries = [];
     let modelChart, costChart;
     let currentTab = 'dashboard';
 
-    // ── Tab navigation ──────────────────────────────────────────────
+    // ── Tabs ────────────────────────────────────────────────────────
     function showTab(tab) {
-      ['dashboard', 'proxy', 'settings'].forEach(t => {
+      ['dashboard','proxy','settings'].forEach(t => {
         document.getElementById(`page-${t}`).classList.add('hidden');
-        document.getElementById(`tab-${t}`).className = 'py-3 text-xs font-semibold uppercase tracking-wider tab-inactive transition-colors';
+        document.getElementById(`tab-${t}`).className = 'tab-btn';
       });
       document.getElementById(`page-${tab}`).classList.remove('hidden');
-      document.getElementById(`tab-${tab}`).className = 'py-3 text-xs font-semibold uppercase tracking-wider tab-active transition-colors';
+      document.getElementById(`tab-${tab}`).className = 'tab-btn active';
       currentTab = tab;
       if (tab === 'settings') loadSettings();
     }
 
-    // ── Dashboard ───────────────────────────────────────────────────
+    // ── Stats ───────────────────────────────────────────────────────
     async function fetchStats() {
       const r = await fetch('/api/v1/logs/stats');
-      const data = await r.json();
-      document.getElementById('stat-calls').textContent = data.total_calls.toLocaleString();
-      document.getElementById('stat-cost').textContent = '$' + data.total_cost_usd.toFixed(4);
-      document.getElementById('stat-latency').textContent = Math.round(data.avg_latency_ms) + 'ms';
-      document.getElementById('stat-tokens').textContent = (data.total_tokens_in + data.total_tokens_out).toLocaleString();
-      renderCharts(data.by_model);
+      const d = await r.json();
+      document.getElementById('stat-calls').textContent = d.total_calls.toLocaleString();
+      document.getElementById('stat-cost').textContent = '$' + d.total_cost_usd.toFixed(4);
+      document.getElementById('stat-latency').textContent = Math.round(d.avg_latency_ms) + 'ms';
+      document.getElementById('stat-tokens').textContent = (d.total_tokens_in + d.total_tokens_out).toLocaleString();
+      renderCharts(d.by_model);
     }
 
     async function fetchLogs() {
       const r = await fetch('/api/v1/logs?limit=200');
-      const data = await r.json();
-      allEntries = data.entries;
+      const d = await r.json();
+      allEntries = d.entries;
       applyFilters();
-      document.getElementById('last-updated').textContent = 'Updated ' + new Date().toLocaleTimeString();
+      document.getElementById('last-updated').textContent = new Date().toLocaleTimeString();
     }
 
+    // ── Filters ─────────────────────────────────────────────────────
     function applyFilters() {
       const provider = document.getElementById('filter-provider').value;
-      const model = document.getElementById('filter-model').value.toLowerCase();
-      const user = document.getElementById('filter-user').value.toLowerCase();
-      const app = document.getElementById('filter-app').value.toLowerCase();
+      const model    = document.getElementById('filter-model').value.toLowerCase();
+      const user     = document.getElementById('filter-user').value.toLowerCase();
+      const app      = document.getElementById('filter-app').value.toLowerCase();
       const filtered = allEntries.filter(e =>
         (!provider || e.provider === provider) &&
-        (!model || (e.model || '').toLowerCase().includes(model)) &&
-        (!user || (e.user_id || '').toLowerCase().includes(user)) &&
-        (!app || (e.app_name || '').toLowerCase().includes(app))
+        (!model    || (e.model   ||'').toLowerCase().includes(model)) &&
+        (!user     || (e.user_id ||'').toLowerCase().includes(user)) &&
+        (!app      || (e.app_name||'').toLowerCase().includes(app))
       );
-      document.getElementById('filter-count').textContent = filtered.length + ' entries';
+      document.getElementById('filter-count').textContent = filtered.length + ' results';
       renderTable(filtered);
     }
 
     function clearFilters() {
-      ['filter-provider', 'filter-model', 'filter-user', 'filter-app'].forEach(id => {
-        const el = document.getElementById(id);
-        el.tagName === 'SELECT' ? (el.value = '') : (el.value = '');
-      });
+      ['filter-model','filter-user','filter-app'].forEach(id => document.getElementById(id).value = '');
+      document.getElementById('filter-provider').value = '';
       applyFilters();
     }
 
-    function providerBadgeClass(p) {
+    // ── Table ───────────────────────────────────────────────────────
+    function providerClass(p) {
       return p === 'openai' ? 'badge-openai' : p === 'anthropic' ? 'badge-anthropic' : p === 'gemini' ? 'badge-gemini' : 'badge-other';
     }
 
     function renderTable(entries) {
       const tbody = document.getElementById('log-table-body');
       if (!entries.length) {
-        tbody.innerHTML = '<tr><td colspan="8" class="px-4 py-8 text-center text-slate-600">No entries found</td></tr>';
+        tbody.innerHTML = `<tr><td colspan="8" class="px-5 py-16 text-center">
+          <div class="text-slate-700 text-sm mb-1">No entries found</div>
+          <div class="text-slate-800 text-xs">Run <code class="text-slate-600">python examples/basic_usage.py</code> to generate test data</div>
+        </td></tr>`;
         return;
       }
       tbody.innerHTML = entries.map(e => {
-        const ts = e.timestamp.slice(0, 19).replace('T', ' ');
-        const cost = e.cost_usd != null ? '$' + e.cost_usd.toFixed(5) : '—';
-        const latency = e.latency_ms != null ? Math.round(e.latency_ms) + 'ms' : '—';
-        const tokens = (e.tokens_in || 0) + ' → ' + (e.tokens_out || 0);
-        const pc = providerBadgeClass(e.provider);
+        const ts      = e.timestamp.slice(0,19).replace('T',' ');
+        const cost    = e.cost_usd    != null ? '$'+e.cost_usd.toFixed(5) : '—';
+        const latency = e.latency_ms  != null ? Math.round(e.latency_ms)+'ms' : '—';
+        const tokens  = `${e.tokens_in||0} → ${e.tokens_out||0}`;
+        const pc = providerClass(e.provider);
         const sc = e.error ? 'badge-error' : 'badge-ok';
-        return `<tr class="border-b border-slate-800/50 hover:bg-slate-800/30 cursor-pointer transition-colors" onclick='showDetail(${JSON.stringify(e).replace(/'/g, "&#39;")})'>
-          <td class="px-4 py-2 text-slate-400">${ts}</td>
-          <td class="px-4 py-2"><span class="px-2 py-0.5 rounded text-xs ${pc}">${e.provider}</span></td>
-          <td class="px-4 py-2 text-slate-300">${e.model}</td>
-          <td class="px-4 py-2 text-slate-500">${e.user_id || '—'}</td>
-          <td class="px-4 py-2 text-right text-slate-400">${tokens}</td>
-          <td class="px-4 py-2 text-right text-green-400">${cost}</td>
-          <td class="px-4 py-2 text-right text-blue-400">${latency}</td>
-          <td class="px-4 py-2 text-center"><span class="px-2 py-0.5 rounded text-xs ${sc}">${e.error ? 'ERROR' : 'OK'}</span></td>
+        return `<tr class="cursor-pointer" style="border-bottom:1px solid rgba(99,102,241,0.06)" onclick='showDetail(${JSON.stringify(e).replace(/'/g,"&#39;")})'>
+          <td class="px-5 py-3 text-slate-500 text-xs">${ts}</td>
+          <td class="px-4 py-3"><span class="badge ${pc}">${e.provider}</span></td>
+          <td class="px-4 py-3 text-slate-300 text-xs">${e.model}</td>
+          <td class="px-4 py-3 text-slate-600 text-xs">${e.user_id||'—'}</td>
+          <td class="px-4 py-3 text-right text-slate-500 text-xs font-mono">${tokens}</td>
+          <td class="px-4 py-3 text-right text-emerald-400 text-xs font-mono">${cost}</td>
+          <td class="px-4 py-3 text-right text-blue-400 text-xs font-mono">${latency}</td>
+          <td class="px-4 py-3 text-center"><span class="badge ${sc}">${e.error?'ERROR':'OK'}</span></td>
         </tr>`;
       }).join('');
     }
 
+    // ── Charts ──────────────────────────────────────────────────────
     function renderCharts(byModel) {
-      const labels = byModel.map(m => m.model.length > 22 ? m.model.slice(0, 22) + '…' : m.model);
-      const calls = byModel.map(m => m.calls);
-      const costs = byModel.map(m => m.cost_usd);
-      const colors = ['#10a37f', '#e8945a', '#74a8ff', '#facc15', '#f87171', '#38bdf8', '#a78bfa'];
+      const labels = byModel.map(m => m.model.length>24 ? m.model.slice(0,24)+'…' : m.model);
+      const calls  = byModel.map(m => m.calls);
+      const costs  = byModel.map(m => m.cost_usd);
+      const palette = ['#6366f1','#10b981','#f97316','#3b82f6','#a855f7','#f59e0b','#ef4444'];
+
       if (modelChart) modelChart.destroy();
       if (costChart) costChart.destroy();
-      const opts = {
+
+      const sharedOpts = {
         responsive: true,
-        plugins: { legend: { display: false } },
+        plugins: { legend: { display: false }, tooltip: {
+          backgroundColor: '#0d1225',
+          borderColor: 'rgba(99,102,241,0.3)',
+          borderWidth: 1,
+          titleColor: '#a5b4fc',
+          bodyColor: '#94a3b8',
+          padding: 10,
+        }},
         scales: {
-          x: { ticks: { color: '#64748b', font: { size: 10 } }, grid: { color: '#1e293b' } },
-          y: { ticks: { color: '#64748b', font: { size: 10 } }, grid: { color: '#1e293b' } }
+          x: { ticks: { color: '#475569', font: { size: 10, family: 'Inter' } }, grid: { color: 'rgba(99,102,241,0.05)' } },
+          y: { ticks: { color: '#475569', font: { size: 10, family: 'Inter' } }, grid: { color: 'rgba(99,102,241,0.05)' } }
         }
       };
+
       modelChart = new Chart(document.getElementById('chart-models'), {
-        type: 'bar', data: { labels, datasets: [{ data: calls, backgroundColor: colors, borderRadius: 4 }] }, options: opts
+        type: 'bar',
+        data: { labels, datasets: [{ data: calls, backgroundColor: palette, borderRadius: 6, borderSkipped: false }] },
+        options: sharedOpts
       });
       costChart = new Chart(document.getElementById('chart-cost'), {
-        type: 'bar', data: { labels, datasets: [{ data: costs, backgroundColor: colors.map(c => c + '99'), borderRadius: 4 }] }, options: opts
+        type: 'bar',
+        data: { labels, datasets: [{ data: costs, backgroundColor: palette.map(c=>c+'bb'), borderRadius: 6, borderSkipped: false }] },
+        options: sharedOpts
       });
     }
 
-    function showDetail(entry) {
-      const content = document.getElementById('modal-content');
+    // ── Detail modal ─────────────────────────────────────────────────
+    function showDetail(e) {
       const rows = [
-        ['ID', entry.id], ['Timestamp', entry.timestamp], ['Provider', entry.provider],
-        ['Model', entry.model], ['App', entry.app_name || '—'], ['User', entry.user_id || '—'],
-        ['Session', entry.session_id || '—'], ['Tokens In', entry.tokens_in ?? '—'],
-        ['Tokens Out', entry.tokens_out ?? '—'],
-        ['Cost', entry.cost_usd != null ? '$' + entry.cost_usd.toFixed(6) : '—'],
-        ['Latency', entry.latency_ms != null ? Math.round(entry.latency_ms) + 'ms' : '—'],
-        ['Error', entry.error || null],
-      ].filter(([, v]) => v !== null);
-      content.innerHTML = rows.map(([k, v]) =>
-        `<div class="flex gap-4"><span class="text-slate-500 w-24 shrink-0">${k}</span><span class="text-slate-300 break-all">${v}</span></div>`
-      ).join('');
-      if (entry.prompt) content.innerHTML += `<div class="mt-3"><div class="text-slate-500 mb-1">Prompt</div><pre class="bg-slate-900 rounded p-3 text-xs text-slate-300 overflow-x-auto whitespace-pre-wrap">${escapeHtml(entry.prompt)}</pre></div>`;
-      if (entry.response) content.innerHTML += `<div class="mt-3"><div class="text-slate-500 mb-1">Response</div><pre class="bg-slate-900 rounded p-3 text-xs text-slate-300 overflow-x-auto whitespace-pre-wrap">${escapeHtml(entry.response)}</pre></div>`;
+        ['ID', e.id], ['Timestamp', e.timestamp], ['Provider', e.provider], ['Model', e.model],
+        ['App', e.app_name||'—'], ['User', e.user_id||'—'], ['Session', e.session_id||'—'],
+        ['Tokens In', e.tokens_in??'—'], ['Tokens Out', e.tokens_out??'—'],
+        ['Cost', e.cost_usd!=null ? '$'+e.cost_usd.toFixed(6) : '—'],
+        ['Latency', e.latency_ms!=null ? Math.round(e.latency_ms)+'ms' : '—'],
+        ['Error', e.error||null],
+      ].filter(([,v])=>v!==null);
+
+      document.getElementById('modal-content').innerHTML =
+        rows.map(([k,v])=>`<div class="flex gap-4 text-xs"><span class="text-slate-600 w-24 shrink-0 font-medium">${k}</span><span class="text-slate-300 break-all font-mono">${v}</span></div>`).join('') +
+        (e.prompt   ? `<div class="mt-4"><div class="text-slate-600 text-xs font-medium mb-1.5">Prompt</div><pre class="text-slate-300 max-h-40">${escapeHtml(e.prompt)}</pre></div>` : '') +
+        (e.response ? `<div class="mt-3"><div class="text-slate-600 text-xs font-medium mb-1.5">Response</div><pre class="text-slate-300 max-h-40">${escapeHtml(e.response)}</pre></div>` : '');
+
       document.getElementById('modal').classList.remove('hidden');
     }
 
-    function closeModal(e) {
-      if (e.target === document.getElementById('modal')) document.getElementById('modal').classList.add('hidden');
-    }
+    document.getElementById('modal').addEventListener('click', function(e) {
+      if (e.target === this) this.classList.add('hidden');
+    });
 
-    // ── Settings ────────────────────────────────────────────────────
-    const PROVIDER_INFO = {
-      openai:    { label: 'OpenAI',    badge: 'badge-openai',    placeholder: 'sk-...',       env: 'OPENAI_API_KEY' },
-      anthropic: { label: 'Anthropic', badge: 'badge-anthropic', placeholder: 'sk-ant-...',   env: 'ANTHROPIC_API_KEY' },
-      gemini:    { label: 'Google Gemini', badge: 'badge-gemini', placeholder: 'AIza...', env: 'GEMINI_API_KEY' },
+    // ── Settings ─────────────────────────────────────────────────────
+    const PINFO = {
+      openai:    { label:'OpenAI',         badge:'badge-openai',    env:'OPENAI_API_KEY',    ph:'sk-...' },
+      anthropic: { label:'Anthropic',      badge:'badge-anthropic', env:'ANTHROPIC_API_KEY', ph:'sk-ant-...' },
+      gemini:    { label:'Google Gemini',  badge:'badge-gemini',    env:'GEMINI_API_KEY',    ph:'AIza...' },
     };
 
     async function loadSettings() {
       const r = await fetch('/api/v1/settings/providers');
       const data = await r.json();
-      const container = document.getElementById('provider-cards');
-      container.innerHTML = Object.entries(PROVIDER_INFO).map(([provider, info]) => {
-        const status = data[provider] || {};
-        const isConfigured = status.configured;
-        const source = status.source;
-        const masked = status.masked || '';
-        return `
-        <div class="card rounded-lg p-5">
+      document.getElementById('provider-cards').innerHTML = Object.entries(PINFO).map(([p, info]) => {
+        const s = data[p] || {};
+        return `<div class="card p-5">
           <div class="flex items-center justify-between mb-3">
-            <div class="flex items-center gap-2">
-              <span class="px-2 py-0.5 rounded text-xs ${info.badge}">${info.label}</span>
-              ${isConfigured
-                ? `<span class="text-green-400 text-xs">✓ Configured ${source === 'env' ? '(env var)' : '(dashboard)'} · ${masked}</span>`
-                : `<span class="text-slate-500 text-xs">Not configured</span>`}
+            <div class="flex items-center gap-2.5">
+              <span class="badge ${info.badge}">${info.label}</span>
+              ${s.configured
+                ? `<span class="text-xs text-emerald-400">✓ ${s.source==='env'?'env var':'dashboard'} · <span class="font-mono">${s.masked||''}</span></span>`
+                : `<span class="text-xs text-slate-600">Not configured</span>`}
             </div>
-            ${isConfigured && source !== 'env' ? `<button onclick="removeKey('${provider}')" class="text-xs text-red-400/60 hover:text-red-400 transition-colors">Remove</button>` : ''}
+            ${s.configured && s.source!=='env' ? `<button onclick="removeKey('${p}')" class="text-xs text-red-400/50 hover:text-red-400 transition-colors">Remove</button>` : ''}
           </div>
-          ${source === 'env'
-            ? `<div class="text-slate-500 text-xs">Key loaded from environment variable <code class="text-slate-400">${info.env}</code>. To change it, update your <code class="text-slate-400">.env</code> file and restart.</div>`
+          ${s.source==='env'
+            ? `<p class="text-slate-600 text-xs">Loaded from env var <code class="text-slate-500">${info.env}</code>. Update your <code class="text-slate-500">.env</code> file to change it.</p>`
             : `<div class="flex gap-2">
-                <input type="password" id="key-${provider}" placeholder="${info.placeholder}" class="flex-1" />
-                <button onclick="saveKey('${provider}')" class="px-3 py-1 rounded bg-indigo-600 hover:bg-indigo-500 text-white text-xs transition-colors">Save</button>
+                <input type="password" id="key-${p}" placeholder="${info.ph}" style="flex:1" />
+                <button onclick="saveKey('${p}')" class="btn btn-primary">Save</button>
                </div>
-               <div class="text-slate-600 text-xs mt-2">Or set env var: <code>${info.env}=your-key</code></div>`}
+               <p class="text-slate-700 text-xs mt-2">Or use env var: <code>${info.env}=your-key</code></p>`}
         </div>`;
       }).join('');
     }
 
-    async function saveKey(provider) {
-      const key = document.getElementById(`key-${provider}`).value.trim();
+    async function saveKey(p) {
+      const key = document.getElementById(`key-${p}`).value.trim();
       if (!key) { toast('Enter a key first'); return; }
       const r = await fetch('/api/v1/settings/providers', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ provider, key }),
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({provider:p, key}),
       });
-      if (r.ok) { toast(`${provider} key saved`); loadSettings(); }
-      else { toast('Error saving key'); }
+      r.ok ? (toast(`${p} key saved ✓`), loadSettings()) : toast('Error saving key');
     }
 
-    async function removeKey(provider) {
-      if (!confirm(`Remove ${provider} key?`)) return;
-      await fetch(`/api/v1/settings/providers/${provider}`, { method: 'DELETE' });
-      toast(`${provider} key removed`);
+    async function removeKey(p) {
+      if (!confirm(`Remove ${p} key?`)) return;
+      await fetch(`/api/v1/settings/providers/${p}`, {method:'DELETE'});
+      toast(`${p} key removed`);
       loadSettings();
     }
 
-    // ── Utilities ───────────────────────────────────────────────────
+    // ── Utilities ─────────────────────────────────────────────────────
     function copy(el) {
       navigator.clipboard.writeText(el.dataset.val);
-      toast('Copied!');
+      toast('Copied to clipboard');
     }
 
     function toast(msg) {
       const el = document.getElementById('toast');
       el.textContent = msg;
-      el.classList.remove('hidden');
-      setTimeout(() => el.classList.add('hidden'), 2000);
+      el.style.display = 'block';
+      clearTimeout(el._t);
+      el._t = setTimeout(() => el.style.display = 'none', 2200);
     }
 
-    function escapeHtml(str) {
-      return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    function escapeHtml(s) {
+      return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
     }
 
     async function refresh() {
-      if (currentTab === 'dashboard') await Promise.all([fetchStats(), fetchLogs()]);
-      if (currentTab === 'settings') await loadSettings();
+      if (currentTab==='dashboard') await Promise.all([fetchStats(), fetchLogs()]);
+      if (currentTab==='settings')  loadSettings();
     }
 
-    // Init
     fetchStats();
     fetchLogs();
-    setInterval(() => { if (currentTab === 'dashboard') refresh(); }, 15000);
+    setInterval(()=>{ if(currentTab==='dashboard') refresh(); }, 15000);
   </script>
 </body>
 </html>
