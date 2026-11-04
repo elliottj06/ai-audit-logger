@@ -137,6 +137,27 @@
 
     .number-animate { transition: all 0.4s ease; }
 
+    .preset-btn {
+      padding: 4px 11px;
+      border-radius: 6px;
+      font-size: 11px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.15s;
+      border: 1px solid rgba(99,102,241,0.15);
+      background: transparent;
+      color: #64748b;
+      letter-spacing: 0.03em;
+    }
+    .preset-btn:hover { border-color: rgba(99,102,241,0.4); color: #94a3b8; }
+    .preset-btn.active { background: rgba(99,102,241,0.2); border-color: rgba(99,102,241,0.5); color: #a5b4fc; }
+
+    .session-row { cursor: pointer; }
+    .session-row:hover { background: rgba(99,102,241,0.05) !important; }
+    .session-detail-row { background: rgba(6,9,17,0.6); }
+    .expand-icon { transition: transform 0.2s; display: inline-block; }
+    .expand-icon.open { transform: rotate(90deg); }
+
     #toast {
       position: fixed; bottom: 24px; right: 24px;
       background: linear-gradient(135deg, #1e2235, #161929);
@@ -166,12 +187,23 @@
   <!-- Tabs -->
   <div class="px-6 flex gap-6" style="border-bottom: 1px solid rgba(99,102,241,0.1);">
     <button onclick="showTab('dashboard')" id="tab-dashboard" class="tab-btn active">Dashboard</button>
+    <button onclick="showTab('sessions')" id="tab-sessions" class="tab-btn">Sessions</button>
     <button onclick="showTab('proxy')" id="tab-proxy" class="tab-btn">Proxy Setup</button>
     <button onclick="showTab('settings')" id="tab-settings" class="tab-btn">Settings</button>
   </div>
 
   <!-- ── DASHBOARD ─────────────────────────────────────────────────── -->
   <div id="page-dashboard" class="p-6 space-y-5 max-w-7xl mx-auto">
+
+    <!-- Date range bar -->
+    <div class="flex items-center gap-2">
+      <span class="text-slate-600 text-xs font-medium uppercase tracking-wider mr-1">Range</span>
+      <button onclick="setPreset('1h')"  id="preset-1h"  class="preset-btn">1H</button>
+      <button onclick="setPreset('24h')" id="preset-24h" class="preset-btn">24H</button>
+      <button onclick="setPreset('7d')"  id="preset-7d"  class="preset-btn">7D</button>
+      <button onclick="setPreset('30d')" id="preset-30d" class="preset-btn">30D</button>
+      <button onclick="setPreset('all')" id="preset-all" class="preset-btn active">All</button>
+    </div>
 
     <!-- Stat Cards -->
     <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
@@ -261,6 +293,48 @@
           </thead>
           <tbody id="log-table-body">
             <tr><td colspan="8" class="px-5 py-12 text-center text-slate-700">Loading…</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── SESSIONS ─────────────────────────────────────────────────── -->
+  <div id="page-sessions" class="hidden p-6 space-y-5 max-w-7xl mx-auto">
+
+    <!-- Date range bar (sessions) -->
+    <div class="flex items-center gap-2">
+      <span class="text-slate-600 text-xs font-medium uppercase tracking-wider mr-1">Range</span>
+      <button onclick="setSPreset('1h')"  id="spreset-1h"  class="preset-btn">1H</button>
+      <button onclick="setSPreset('24h')" id="spreset-24h" class="preset-btn">24H</button>
+      <button onclick="setSPreset('7d')"  id="spreset-7d"  class="preset-btn">7D</button>
+      <button onclick="setSPreset('30d')" id="spreset-30d" class="preset-btn">30D</button>
+      <button onclick="setSPreset('all')" id="spreset-all" class="preset-btn active">All</button>
+    </div>
+
+    <!-- Sessions table -->
+    <div class="card overflow-hidden">
+      <div class="px-5 py-3 flex items-center justify-between" style="border-bottom: 1px solid rgba(99,102,241,0.1);">
+        <span class="text-slate-300 text-xs font-semibold uppercase tracking-wider">Sessions</span>
+        <span class="text-slate-600 text-xs">click any row to expand calls</span>
+      </div>
+      <div class="overflow-x-auto">
+        <table class="w-full text-xs">
+          <thead>
+            <tr class="text-slate-600" style="border-bottom: 1px solid rgba(99,102,241,0.08);">
+              <th class="text-left px-5 py-3 w-6"></th>
+              <th class="text-left px-4 py-3">Session ID</th>
+              <th class="text-right px-4 py-3">Calls</th>
+              <th class="text-right px-4 py-3">Cost</th>
+              <th class="text-right px-4 py-3">Tokens In</th>
+              <th class="text-right px-4 py-3">Tokens Out</th>
+              <th class="text-right px-4 py-3">Avg Latency</th>
+              <th class="text-right px-4 py-3">Errors</th>
+              <th class="text-right px-4 py-3">Last Call</th>
+            </tr>
+          </thead>
+          <tbody id="sessions-table-body">
+            <tr><td colspan="9" class="px-5 py-12 text-center text-slate-700">Loading…</td></tr>
           </tbody>
         </table>
       </div>
@@ -411,6 +485,8 @@ ALERT_HOURLY_COST=5.00</pre>
     let modelChart, costChart;
     let currentTab = 'dashboard';
     let _apiKey = localStorage.getItem('audit_api_key') || '';
+    let currentPreset  = 'all';  // dashboard date range
+    let currentSPreset = 'all';  // sessions date range
 
     // ── Auth ─────────────────────────────────────────────────────────
     function authHeaders() {
@@ -426,9 +502,8 @@ ALERT_HOURLY_COST=5.00</pre>
     async function checkAuth() {
       const r = await fetch('/api/v1/auth/status');
       const { auth_required } = await r.json();
-      if (!auth_required) return; // open access
+      if (!auth_required) return;
       if (!_apiKey) { showLogin(); return; }
-      // validate stored key
       const test = await fetch('/api/v1/logs/stats', { headers: authHeaders() });
       if (test.status === 401) { _apiKey = ''; localStorage.removeItem('audit_api_key'); showLogin(); }
     }
@@ -454,7 +529,7 @@ ALERT_HOURLY_COST=5.00</pre>
 
     // ── Tabs ────────────────────────────────────────────────────────
     function showTab(tab) {
-      ['dashboard','proxy','settings'].forEach(t => {
+      ['dashboard','sessions','proxy','settings'].forEach(t => {
         document.getElementById(`page-${t}`).classList.add('hidden');
         document.getElementById(`tab-${t}`).className = 'tab-btn';
       });
@@ -462,11 +537,37 @@ ALERT_HOURLY_COST=5.00</pre>
       document.getElementById(`tab-${tab}`).className = 'tab-btn active';
       currentTab = tab;
       if (tab === 'settings') loadSettings();
+      if (tab === 'sessions') fetchSessions();
+    }
+
+    // ── Date range helpers ───────────────────────────────────────────
+    function getSince(preset) {
+      if (preset === 'all') return null;
+      const ms = { '1h': 3600000, '24h': 86400000, '7d': 604800000, '30d': 2592000000 };
+      return new Date(Date.now() - ms[preset]).toISOString();
+    }
+
+    function setPreset(p) {
+      currentPreset = p;
+      ['1h','24h','7d','30d','all'].forEach(x => {
+        document.getElementById(`preset-${x}`).className = 'preset-btn' + (x === p ? ' active' : '');
+      });
+      Promise.all([fetchStats(), fetchLogs()]);
+    }
+
+    function setSPreset(p) {
+      currentSPreset = p;
+      ['1h','24h','7d','30d','all'].forEach(x => {
+        document.getElementById(`spreset-${x}`).className = 'preset-btn' + (x === p ? ' active' : '');
+      });
+      fetchSessions();
     }
 
     // ── Stats ───────────────────────────────────────────────────────
     async function fetchStats() {
-      const r = await apiFetch('/api/v1/logs/stats');
+      const since = getSince(currentPreset);
+      const qs = since ? `?since=${encodeURIComponent(since)}` : '';
+      const r = await apiFetch(`/api/v1/logs/stats${qs}`);
       const d = await r.json();
       document.getElementById('stat-calls').textContent = d.total_calls.toLocaleString();
       document.getElementById('stat-cost').textContent = '$' + d.total_cost_usd.toFixed(4);
@@ -476,11 +577,106 @@ ALERT_HOURLY_COST=5.00</pre>
     }
 
     async function fetchLogs() {
-      const r = await apiFetch('/api/v1/logs?limit=200');
+      const since = getSince(currentPreset);
+      const qs = since ? `&since=${encodeURIComponent(since)}` : '';
+      const r = await apiFetch(`/api/v1/logs?limit=200${qs}`);
       const d = await r.json();
       allEntries = d.entries;
       applyFilters();
       document.getElementById('last-updated').textContent = new Date().toLocaleTimeString();
+    }
+
+    // ── Sessions ─────────────────────────────────────────────────────
+    async function fetchSessions() {
+      const since = getSince(currentSPreset);
+      const qs = since ? `?since=${encodeURIComponent(since)}` : '';
+      const tbody = document.getElementById('sessions-table-body');
+      tbody.innerHTML = `<tr><td colspan="9" class="px-5 py-12 text-center text-slate-700">Loading…</td></tr>`;
+      const r = await apiFetch(`/api/v1/sessions${qs}`);
+      const d = await r.json();
+      renderSessions(d.sessions);
+    }
+
+    function renderSessions(sessions) {
+      const tbody = document.getElementById('sessions-table-body');
+      if (!sessions.length) {
+        tbody.innerHTML = `<tr><td colspan="9" class="px-5 py-16 text-center">
+          <div class="text-slate-700 text-sm">No sessions found</div>
+          <div class="text-slate-800 text-xs mt-1">Log calls with a <code class="text-slate-600">session_id</code> to group them here</div>
+        </td></tr>`;
+        return;
+      }
+      tbody.innerHTML = sessions.map(s => {
+        const lastCall = s.last_call.slice(0,19).replace('T',' ');
+        const errStyle = s.errors > 0 ? 'color:#f87171' : 'color:#475569';
+        return `<tr id="srow-${CSS.escape(s.session_id)}" class="session-row" style="border-bottom:1px solid rgba(99,102,241,0.06)"
+                    onclick="toggleSession(${JSON.stringify(s.session_id).replace(/'/g,'&#39;')}, this)">
+          <td class="px-5 py-3 text-slate-600"><span class="expand-icon">▶</span></td>
+          <td class="px-4 py-3 text-slate-300 text-xs font-mono">${escapeHtml(s.session_id)}</td>
+          <td class="px-4 py-3 text-right text-slate-400 text-xs">${s.calls}</td>
+          <td class="px-4 py-3 text-right text-emerald-400 text-xs font-mono">$${(s.total_cost_usd||0).toFixed(5)}</td>
+          <td class="px-4 py-3 text-right text-slate-500 text-xs font-mono">${(s.tokens_in||0).toLocaleString()}</td>
+          <td class="px-4 py-3 text-right text-slate-500 text-xs font-mono">${(s.tokens_out||0).toLocaleString()}</td>
+          <td class="px-4 py-3 text-right text-blue-400 text-xs font-mono">${Math.round(s.avg_latency_ms||0)}ms</td>
+          <td class="px-4 py-3 text-right text-xs font-mono" style="${errStyle}">${s.errors||0}</td>
+          <td class="px-4 py-3 text-right text-slate-600 text-xs">${lastCall}</td>
+        </tr>
+        <tr id="sdetail-${CSS.escape(s.session_id)}" class="session-detail-row hidden">
+          <td colspan="9" class="px-8 py-3">
+            <div id="sdetail-content-${CSS.escape(s.session_id)}" class="text-slate-600 text-xs">Loading…</div>
+          </td>
+        </tr>`;
+      }).join('');
+    }
+
+    async function toggleSession(sessionId, clickedRow) {
+      const eid = CSS.escape(sessionId);
+      const detailRow  = document.getElementById(`sdetail-${eid}`);
+      const icon = clickedRow.querySelector('.expand-icon');
+      const isOpen = !detailRow.classList.contains('hidden');
+
+      if (isOpen) {
+        detailRow.classList.add('hidden');
+        icon.classList.remove('open');
+        return;
+      }
+
+      detailRow.classList.remove('hidden');
+      icon.classList.add('open');
+
+      const contentEl = document.getElementById(`sdetail-content-${eid}`);
+      contentEl.textContent = 'Loading…';
+
+      const r = await apiFetch(`/api/v1/sessions/${encodeURIComponent(sessionId)}`);
+      const d = await r.json();
+
+      const palette = { openai:'badge-openai', anthropic:'badge-anthropic', gemini:'badge-gemini' };
+      contentEl.innerHTML = `<table class="w-full text-xs mb-2">
+        <thead><tr class="text-slate-700" style="border-bottom:1px solid rgba(99,102,241,0.06)">
+          <th class="text-left py-1.5 pr-4">Timestamp</th>
+          <th class="text-left pr-4">Provider</th>
+          <th class="text-left pr-4">Model</th>
+          <th class="text-right pr-4">Tokens</th>
+          <th class="text-right pr-4">Cost</th>
+          <th class="text-right pr-4">Latency</th>
+          <th class="text-center">Status</th>
+        </tr></thead>
+        <tbody>${d.entries.map(e => {
+          const ts = e.timestamp.slice(0,19).replace('T',' ');
+          const pc = palette[e.provider] || 'badge-other';
+          const sc = e.error ? 'badge-error' : 'badge-ok';
+          return `<tr style="border-bottom:1px solid rgba(99,102,241,0.04)" class="cursor-pointer hover:bg-indigo-950/20"
+                      onclick='event.stopPropagation(); showDetail(${JSON.stringify(e).replace(/'/g,"&#39;")})'>
+            <td class="py-2 pr-4 text-slate-500">${ts}</td>
+            <td class="pr-4"><span class="badge ${pc}">${e.provider}</span></td>
+            <td class="pr-4 text-slate-400">${e.model}</td>
+            <td class="pr-4 text-right text-slate-500 font-mono">${e.tokens_in||0} → ${e.tokens_out||0}</td>
+            <td class="pr-4 text-right text-emerald-400 font-mono">${e.cost_usd!=null?'$'+e.cost_usd.toFixed(5):'—'}</td>
+            <td class="pr-4 text-right text-blue-400 font-mono">${e.latency_ms!=null?Math.round(e.latency_ms)+'ms':'—'}</td>
+            <td class="text-center"><span class="badge ${sc}">${e.error?'ERR':'OK'}</span></td>
+          </tr>`;
+        }).join('')}</tbody>
+      </table>`;
     }
 
     // ── Filters ─────────────────────────────────────────────────────
@@ -671,6 +867,7 @@ ALERT_HOURLY_COST=5.00</pre>
 
     async function refresh() {
       if (currentTab==='dashboard') await Promise.all([fetchStats(), fetchLogs()]);
+      if (currentTab==='sessions')  fetchSessions();
       if (currentTab==='settings')  loadSettings();
     }
 
@@ -681,7 +878,7 @@ ALERT_HOURLY_COST=5.00</pre>
     }
 
     init();
-    setInterval(()=>{ if(currentTab==='dashboard') refresh(); }, 15000);
+    setInterval(()=>{ if(currentTab==='dashboard'||currentTab==='sessions') refresh(); }, 15000);
   </script>
 </body>
 </html>
