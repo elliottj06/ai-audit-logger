@@ -8,6 +8,8 @@ A self-hosted audit logger for LLM API calls. One line of code captures every Op
 
 Built for teams that need visibility into their AI usage for **debugging**, **cost control**, and **compliance** (EU AI Act, SOC 2).
 
+![AI Audit Logger web dashboard showing total calls, cost, latency, token usage, per-model charts and a filterable table of recent calls](docs/images/dashboard.png)
+
 ---
 
 ## How it works
@@ -83,20 +85,12 @@ Showing 3 of 3 entries
 ```
 
 **`stats` output:**
-```
-AI Audit Logger — Stats
 
-  Total calls:       3
-  Total cost:        $0.0013
-  Tokens in:         38
-  Tokens out:        73
-  Avg latency:       722ms
+![Output of the stats command: total calls, total cost, tokens in and out, average latency, and a per-model breakdown of calls and cost](docs/images/cli-stats.png)
 
-  By model:
-  gpt-4o                               1 calls  $0.0006
-  claude-sonnet-4-6                    1 calls  $0.0007
-  gpt-4o-mini                          1 calls  $0.0000
-```
+### 4. Open the dashboard
+
+With the server running, open **http://localhost:8000** for the web dashboard: summary cards, calls and cost by model, and a filterable table of recent calls (click any row for full detail).
 
 ---
 
@@ -155,9 +149,10 @@ ai-audit-logger/
 │   ├── main.py
 │   ├── models.py            # SQLAlchemy LogEntry model
 │   ├── db.py                # Postgres connection
-│   └── routes/
-│       ├── ingest.py        # POST /api/v1/log
-│       └── query.py         # GET /api/v1/logs + /stats
+│   ├── routes/
+│   │   ├── ingest.py        # POST /api/v1/log
+│   │   └── query.py         # GET /api/v1/logs + /stats
+│   └── static/index.html    # Web dashboard (served at /)
 ├── sdk/python/              # Python SDK
 │   └── ai_audit_logger/
 │       ├── __init__.py      # wrap() + configure()
@@ -176,7 +171,7 @@ ai-audit-logger/
 ## Roadmap
 
 - [ ] TypeScript / Node.js SDK
-- [ ] Web dashboard with cost charts
+- [x] Web dashboard with cost charts
 - [ ] LangChain integration
 - [ ] Publish to PyPI (`pip install ai-audit-logger`)
 - [ ] Tamper-evident log hashing for compliance exports
