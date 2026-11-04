@@ -1,0 +1,59 @@
+name: CI
+
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+    branches: [master, main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: ai_audit
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install server dependencies
+        run: pip install -r server/requirements.txt
+
+      - name: Start server
+        env:
+          DATABASE_URL: postgresql+psycopg2://postgres:postgres@localhost:5432/ai_audit
+        run: |
+          uvicorn server.main:app --host 0.0.0.0 --port 8000 &
+          sleep 3
+
+      - name: Health check
+        run: curl -f http://localhost:8000/health
+
+      - name: Test ingest endpoint
+        run: |
+          curl -f -X POST http://localhost:8000/api/v1/log \
+            -H "Content-Type: application/json" \
+            -d '{"provider":"openai","model":"gpt-4o","tokens_in":10,"tokens_out":20,"latency_ms":500,"cost_usd":0.00015}'
+
+      - name: Test query endpoint
+        run: curl -f http://localhost:8000/api/v1/logs
+
+      - name: Test stats endpoint
+        run: curl -f http://localhost:8000/api/v1/logs/stats

@@ -1,34 +1,54 @@
 # AI Audit Logger
 
-A drop-in audit logger for LLM API calls. Records every OpenAI and Anthropic call — prompts, responses, tokens, cost, latency — in a queryable, self-hosted database.
+![CI](https://github.com/elliottj06/ai-audit-logger/actions/workflows/ci.yml/badge.svg)
+![Python](https://img.shields.io/badge/python-3.9%2B-blue)
+![License](https://img.shields.io/badge/license-MIT-green)
 
-Built for teams that need visibility into their AI usage for debugging, cost control, and compliance (EU AI Act, SOC 2).
+A self-hosted audit logger for LLM API calls. One line of code captures every OpenAI and Anthropic call — prompts, responses, tokens, cost, latency — and stores it in a queryable database.
+
+Built for teams that need visibility into their AI usage for **debugging**, **cost control**, and **compliance** (EU AI Act, SOC 2).
+
+---
+
+## How it works
+
+```
+Your App  →  SDK (wrap your client)  →  Ingest API  →  Postgres
+                                                            ↓
+                                               CLI / Dashboard / Export
+```
+
+The SDK is a thin wrapper around your existing OpenAI or Anthropic client. It intercepts every call, records it asynchronously (never blocks your app), and ships it to the server.
+
+---
 
 ## Quickstart
 
 ### 1. Start the server
 
 ```bash
+git clone https://github.com/elliottj06/ai-audit-logger
+cd ai-audit-logger
 docker compose up -d
 ```
 
-This starts Postgres and the ingest/query API on `http://localhost:8000`.
+### 2. Wrap your client — one line change
 
-### 2. Wrap your client (one line change)
-
+**OpenAI:**
 ```python
 from openai import OpenAI
 from ai_audit_logger import wrap
 
 client = wrap(OpenAI())
 
-# Every call is now logged automatically
+# Every call now logged automatically — no other changes needed
 response = client.chat.completions.create(
     model="gpt-4o",
     messages=[{"role": "user", "content": "Hello"}]
 )
 ```
 
+**Anthropic:**
 ```python
 from anthropic import Anthropic
 from ai_audit_logger import wrap
@@ -45,34 +65,64 @@ response = client.messages.create(
 ### 3. Query your logs
 
 ```bash
-# Install CLI
 pip install -r cli/requirements.txt
 
-# Show recent calls
+python cli/main.py tail        # recent calls
+python cli/main.py stats       # cost + usage summary
+```
+
+**`tail` output:**
+```
+Showing 3 of 3 entries
+
+ Timestamp           Provider    Model                        Tokens        Cost          Latency
+ ------------------- ----------- ---------------------------- ------------ ------------- ---------
+ 2026-11-04 14:23:01 openai      gpt-4o                       18→32         $0.00057      843ms
+ 2026-11-04 14:23:02 anthropic   claude-sonnet-4-6            20→41         $0.00068      1204ms
+ 2026-11-04 14:23:03 openai      gpt-4o-mini                  0→0           n/a           120ms    ERROR
+```
+
+**`stats` output:**
+```
+AI Audit Logger — Stats
+
+  Total calls:       3
+  Total cost:        $0.0013
+  Tokens in:         38
+  Tokens out:        73
+  Avg latency:       722ms
+
+  By model:
+  gpt-4o                               1 calls  $0.0006
+  claude-sonnet-4-6                    1 calls  $0.0007
+  gpt-4o-mini                          1 calls  $0.0000
+```
+
+---
+
+## Try it without API keys
+
+Run the included example to send simulated log entries and see the CLI in action:
+
+```bash
+python examples/basic_usage.py
 python cli/main.py tail
-
-# Show stats
 python cli/main.py stats
-
-# Filter by provider, model, user
-python cli/main.py tail --provider openai --model gpt-4o --limit 50
 ```
 
 ---
 
 ## Configuration
 
-Set via environment variables or `configure()`:
-
 ```python
 from ai_audit_logger import configure
 
 configure(
-    server_url="http://localhost:8000",
-    app_name="my-chatbot",
-    user_id="user-123",          # optional: tie logs to a user
-    session_id="session-abc",    # optional: group calls into a session
-    redact_prompts=False,        # set True to omit prompt text
+    server_url="http://localhost:8000",  # your server
+    app_name="my-chatbot",              # tag logs by app
+    user_id="user-123",                 # tie logs to a user
+    session_id="session-abc",           # group calls into sessions
+    redact_prompts=False,               # True = omit prompt text from logs
     enabled=True,
 )
 ```
@@ -81,43 +131,56 @@ configure(
 |---|---|---|
 | `AUDIT_SERVER_URL` | `http://localhost:8000` | Ingest server URL |
 | `AUDIT_APP_NAME` | (none) | Tag logs with your app name |
-| `AUDIT_ENABLED` | `true` | Set `false` to disable logging |
-| `AUDIT_REDACT_PROMPTS` | `false` | Omit prompt/response text from logs |
+| `AUDIT_ENABLED` | `true` | Set `false` to disable without code changes |
+| `AUDIT_REDACT_PROMPTS` | `false` | Omit prompt/response text (privacy mode) |
 
 ---
 
 ## API
 
-| Endpoint | Description |
-|---|---|
-| `POST /api/v1/log` | Ingest a log entry |
-| `GET /api/v1/logs` | Query logs (filter by provider, model, user, app, session) |
-| `GET /api/v1/logs/stats` | Aggregated stats (total calls, cost, tokens, latency) |
-| `GET /health` | Health check |
+| Endpoint | Method | Description |
+|---|---|---|
+| `/api/v1/log` | POST | Ingest a log entry |
+| `/api/v1/logs` | GET | Query logs (filter by provider, model, user, app, session) |
+| `/api/v1/logs/stats` | GET | Aggregated stats — total calls, cost, tokens, latency |
+| `/health` | GET | Health check |
 
 ---
 
-## Project Structure
+## Project structure
 
 ```
 ai-audit-logger/
-├── server/           # FastAPI ingest + query API
-├── sdk/python/       # Python SDK (wrap OpenAI/Anthropic)
-├── cli/              # CLI for querying logs
-├── docker-compose.yml
-└── .env.example
+├── server/                  # FastAPI ingest + query API
+│   ├── main.py
+│   ├── models.py            # SQLAlchemy LogEntry model
+│   ├── db.py                # Postgres connection
+│   └── routes/
+│       ├── ingest.py        # POST /api/v1/log
+│       └── query.py         # GET /api/v1/logs + /stats
+├── sdk/python/              # Python SDK
+│   └── ai_audit_logger/
+│       ├── __init__.py      # wrap() + configure()
+│       ├── wrapper.py       # OpenAI + Anthropic wrappers
+│       ├── client.py        # Fire-and-forget HTTP sender
+│       └── config.py        # AuditConfig dataclass
+├── cli/
+│   └── main.py              # tail / stats / get commands
+├── examples/
+│   └── basic_usage.py       # Try it without API keys
+└── docker-compose.yml
 ```
 
 ---
 
 ## Roadmap
 
-- [ ] TypeScript SDK
+- [ ] TypeScript / Node.js SDK
+- [ ] Web dashboard with cost charts
 - [ ] LangChain integration
-- [ ] Web dashboard
-- [ ] Tamper-evident log hashing (compliance tier)
-- [ ] Slack/email alerts on cost spikes
-- [ ] Export to CSV / JSONL for compliance reports
+- [ ] Publish to PyPI (`pip install ai-audit-logger`)
+- [ ] Tamper-evident log hashing for compliance exports
+- [ ] Slack / email alerts on cost spikes
 
 ---
 
