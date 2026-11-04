@@ -8,7 +8,7 @@ except FileNotFoundError:
 
 setup(
     name="ai-audit-logger",
-    version="0.1.0",
+    version="0.1.1",
     description="Drop-in audit logging for LLM API calls (OpenAI, Anthropic)",
     long_description=readme,
     long_description_content_type="text/markdown",
