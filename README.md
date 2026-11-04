@@ -1,6 +1,7 @@
 # AI Audit Logger
 
 ![CI](https://github.com/elliottj06/ai-audit-logger/actions/workflows/ci.yml/badge.svg)
+![PyPI](https://img.shields.io/pypi/v/ai-audit-logger)
 ![Python](https://img.shields.io/badge/python-3.9%2B-blue)
 ![License](https://img.shields.io/badge/license-MIT-green)
 
@@ -173,7 +174,7 @@ ai-audit-logger/
 - [ ] TypeScript / Node.js SDK
 - [x] Web dashboard with cost charts
 - [ ] LangChain integration
-- [ ] Publish to PyPI (`pip install ai-audit-logger`)
+- [x] Publish to PyPI (`pip install ai-audit-logger`)
 - [ ] Tamper-evident log hashing for compliance exports
 - [ ] Slack / email alerts on cost spikes
 
