@@ -8,3 +8,5 @@ postgres_data/
 *.egg-info/
 dist/
 build/
+server/server_config.json
+node_modules/

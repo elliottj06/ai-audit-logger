@@ -1,6 +1,6 @@
 from .config import AuditConfig
 from .client import AuditClient
-from .wrapper import WrappedOpenAI, WrappedAnthropic
+from .wrapper import WrappedOpenAI, WrappedAnthropic, WrappedGeminiModel
 
 _default_config = AuditConfig()
 _default_client = AuditClient(_default_config)
@@ -46,8 +46,13 @@ def wrap(client, config: AuditConfig = None):
         return WrappedOpenAI(client, audit, cfg)
     elif "Anthropic" in class_name:
         return WrappedAnthropic(client, audit, cfg)
+    elif "GenerativeModel" in class_name:
+        return WrappedGeminiModel(client, audit, cfg)
     else:
-        raise ValueError(f"Unsupported client type: {class_name}. Expected OpenAI or Anthropic.")
+        raise ValueError(
+            f"Unsupported client type: {class_name}. "
+            "Expected OpenAI, Anthropic, or google.generativeai.GenerativeModel."
+        )
 
 
 __all__ = ["wrap", "configure", "AuditConfig", "AuditClient"]

@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
-from server.routes import ingest, query
+from server.routes import ingest, query, proxy, settings
 from server.db import init_db
 import os
 
@@ -28,3 +28,5 @@ def dashboard():
 
 app.include_router(ingest.router)
 app.include_router(query.router)
+app.include_router(proxy.router)
+app.include_router(settings.router)

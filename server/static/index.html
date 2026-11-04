@@ -11,12 +11,29 @@
     .card { background: #1a1d2e; border: 1px solid #2d3148; }
     .badge-openai { background: #10a37f22; color: #10a37f; }
     .badge-anthropic { background: #d97b4522; color: #e8945a; }
+    .badge-gemini { background: #4285f422; color: #74a8ff; }
     .badge-other { background: #6366f122; color: #818cf8; }
     .badge-error { background: #ef444422; color: #f87171; }
     .badge-ok { background: #22c55e22; color: #4ade80; }
+    .tab-active { border-bottom: 2px solid #6366f1; color: white; }
+    .tab-inactive { border-bottom: 2px solid transparent; color: #64748b; }
+    .tab-inactive:hover { color: #94a3b8; }
+    input[type=text], input[type=password] {
+      background: #0f1117;
+      border: 1px solid #2d3148;
+      color: #e2e8f0;
+      border-radius: 6px;
+      padding: 6px 10px;
+      font-size: 12px;
+      outline: none;
+      font-family: monospace;
+    }
+    input[type=text]:focus, input[type=password]:focus { border-color: #6366f1; }
     ::-webkit-scrollbar { width: 6px; }
     ::-webkit-scrollbar-track { background: #1a1d2e; }
     ::-webkit-scrollbar-thumb { background: #2d3148; border-radius: 3px; }
+    .copy-btn { cursor: pointer; }
+    .copy-btn:hover { opacity: 0.7; }
   </style>
 </head>
 <body class="min-h-screen font-mono text-sm">
@@ -29,13 +46,19 @@
     </div>
     <div class="flex items-center gap-4 text-slate-400 text-xs">
       <span id="last-updated">—</span>
-      <button onclick="refresh()" class="px-3 py-1 rounded border border-slate-700 hover:border-slate-500 hover:text-white transition-colors">
-        Refresh
-      </button>
+      <button onclick="refresh()" class="px-3 py-1 rounded border border-slate-700 hover:border-slate-500 hover:text-white transition-colors">Refresh</button>
     </div>
   </div>
 
-  <div class="p-6 space-y-6 max-w-7xl mx-auto">
+  <!-- Tabs -->
+  <div class="border-b border-slate-800 px-6 flex gap-6">
+    <button onclick="showTab('dashboard')" id="tab-dashboard" class="py-3 text-xs font-semibold uppercase tracking-wider tab-active transition-colors">Dashboard</button>
+    <button onclick="showTab('proxy')" id="tab-proxy" class="py-3 text-xs font-semibold uppercase tracking-wider tab-inactive transition-colors">Proxy Setup</button>
+    <button onclick="showTab('settings')" id="tab-settings" class="py-3 text-xs font-semibold uppercase tracking-wider tab-inactive transition-colors">Settings</button>
+  </div>
+
+  <!-- ── DASHBOARD TAB ──────────────────────────────────────────────── -->
+  <div id="page-dashboard" class="p-6 space-y-6 max-w-7xl mx-auto">
 
     <!-- Stat Cards -->
     <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
@@ -52,12 +75,12 @@
         <div id="stat-latency" class="text-2xl font-bold text-blue-400">—</div>
       </div>
       <div class="card rounded-lg p-4">
-        <div class="text-slate-400 text-xs mb-1">Tokens Used</div>
+        <div class="text-slate-400 text-xs mb-1">Total Tokens</div>
         <div id="stat-tokens" class="text-2xl font-bold text-purple-400">—</div>
       </div>
     </div>
 
-    <!-- Charts Row -->
+    <!-- Charts -->
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
       <div class="card rounded-lg p-4">
         <div class="text-slate-300 text-xs font-semibold mb-4 uppercase tracking-wider">Calls by Model</div>
@@ -69,20 +92,25 @@
       </div>
     </div>
 
-    <!-- Filters -->
+    <!-- Filters + Export -->
     <div class="card rounded-lg p-4">
       <div class="flex flex-wrap gap-3 items-center">
         <span class="text-slate-400 text-xs uppercase tracking-wider">Filter:</span>
-        <select id="filter-provider" onchange="applyFilters()" class="bg-slate-800 border border-slate-700 rounded px-2 py-1 text-xs text-slate-300 focus:outline-none focus:border-slate-500">
+        <select id="filter-provider" onchange="applyFilters()" class="bg-slate-800 border border-slate-700 rounded px-2 py-1 text-xs text-slate-300 focus:outline-none">
           <option value="">All Providers</option>
           <option value="openai">OpenAI</option>
           <option value="anthropic">Anthropic</option>
+          <option value="gemini">Gemini</option>
         </select>
-        <input id="filter-model" oninput="applyFilters()" placeholder="Model..." class="bg-slate-800 border border-slate-700 rounded px-2 py-1 text-xs text-slate-300 focus:outline-none focus:border-slate-500 w-40" />
-        <input id="filter-user" oninput="applyFilters()" placeholder="User ID..." class="bg-slate-800 border border-slate-700 rounded px-2 py-1 text-xs text-slate-300 focus:outline-none focus:border-slate-500 w-40" />
-        <input id="filter-app" oninput="applyFilters()" placeholder="App name..." class="bg-slate-800 border border-slate-700 rounded px-2 py-1 text-xs text-slate-300 focus:outline-none focus:border-slate-500 w-40" />
+        <input id="filter-model" oninput="applyFilters()" placeholder="Model..." class="bg-slate-800 border border-slate-700 rounded px-2 py-1 text-xs text-slate-300 focus:outline-none w-36" />
+        <input id="filter-user" oninput="applyFilters()" placeholder="User ID..." class="bg-slate-800 border border-slate-700 rounded px-2 py-1 text-xs text-slate-300 focus:outline-none w-36" />
+        <input id="filter-app" oninput="applyFilters()" placeholder="App name..." class="bg-slate-800 border border-slate-700 rounded px-2 py-1 text-xs text-slate-300 focus:outline-none w-36" />
         <button onclick="clearFilters()" class="text-xs text-slate-500 hover:text-slate-300 transition-colors">Clear</button>
-        <span id="filter-count" class="ml-auto text-xs text-slate-500"></span>
+        <span id="filter-count" class="text-xs text-slate-500"></span>
+        <div class="ml-auto flex gap-2">
+          <a href="/api/v1/logs/export?format=csv" class="px-3 py-1 rounded border border-slate-700 hover:border-green-500 hover:text-green-400 text-xs transition-colors">↓ CSV</a>
+          <a href="/api/v1/logs/export?format=jsonl" class="px-3 py-1 rounded border border-slate-700 hover:border-blue-500 hover:text-blue-400 text-xs transition-colors">↓ JSONL</a>
+        </div>
       </div>
     </div>
 
@@ -114,6 +142,126 @@
     </div>
   </div>
 
+  <!-- ── PROXY SETUP TAB ───────────────────────────────────────────── -->
+  <div id="page-proxy" class="hidden p-6 max-w-4xl mx-auto space-y-6">
+
+    <div class="card rounded-lg p-5">
+      <div class="text-white font-semibold mb-2">Zero-code integration</div>
+      <div class="text-slate-400 text-xs leading-relaxed">
+        Instead of changing your application code, point your AI client to these proxy URLs.
+        Every call gets logged automatically — no SDK installation required.
+        <br/><br/>
+        Configure your API keys in the <button onclick="showTab('settings')" class="text-indigo-400 hover:text-indigo-300 underline">Settings tab</button>, then use the URLs below.
+      </div>
+    </div>
+
+    <!-- OpenAI Proxy -->
+    <div class="card rounded-lg p-5">
+      <div class="flex items-center gap-2 mb-4">
+        <span class="px-2 py-0.5 rounded text-xs badge-openai">OpenAI</span>
+        <span class="text-white font-semibold">OpenAI Proxy</span>
+      </div>
+      <div class="text-slate-400 text-xs mb-3">Change <code class="text-slate-300">base_url</code> in your OpenAI client:</div>
+      <pre class="bg-slate-900 rounded p-3 text-xs text-slate-300 overflow-x-auto mb-3">from openai import OpenAI
+
+client = OpenAI(
+    base_url="http://localhost:8000/proxy/openai/v1",
+    api_key="your-openai-key"  # or leave empty if key is set in dashboard
+)
+
+# All calls now logged — no other changes needed
+response = client.chat.completions.create(
+    model="gpt-4o",
+    messages=[{"role": "user", "content": "Hello!"}]
+)</pre>
+      <div class="text-slate-500 text-xs">Proxy URL: <span class="text-slate-300 copy-btn" onclick="copy(this)" data-val="http://localhost:8000/proxy/openai/v1">http://localhost:8000/proxy/openai/v1 📋</span></div>
+    </div>
+
+    <!-- Anthropic Proxy -->
+    <div class="card rounded-lg p-5">
+      <div class="flex items-center gap-2 mb-4">
+        <span class="px-2 py-0.5 rounded text-xs badge-anthropic">Anthropic</span>
+        <span class="text-white font-semibold">Anthropic Proxy</span>
+      </div>
+      <div class="text-slate-400 text-xs mb-3">Change <code class="text-slate-300">base_url</code> in your Anthropic client:</div>
+      <pre class="bg-slate-900 rounded p-3 text-xs text-slate-300 overflow-x-auto mb-3">from anthropic import Anthropic
+
+client = Anthropic(
+    base_url="http://localhost:8000/proxy/anthropic",
+    api_key="your-anthropic-key"  # or leave empty if key is set in dashboard
+)
+
+response = client.messages.create(
+    model="claude-sonnet-4-6",
+    max_tokens=1024,
+    messages=[{"role": "user", "content": "Hello!"}]
+)</pre>
+      <div class="text-slate-500 text-xs">Proxy URL: <span class="text-slate-300 copy-btn" onclick="copy(this)" data-val="http://localhost:8000/proxy/anthropic">http://localhost:8000/proxy/anthropic 📋</span></div>
+    </div>
+
+    <!-- Gemini Proxy -->
+    <div class="card rounded-lg p-5">
+      <div class="flex items-center gap-2 mb-4">
+        <span class="px-2 py-0.5 rounded text-xs badge-gemini">Gemini</span>
+        <span class="text-white font-semibold">Google Gemini Proxy</span>
+      </div>
+      <div class="text-slate-400 text-xs mb-3">Use the proxy URL with the Google AI Python SDK:</div>
+      <pre class="bg-slate-900 rounded p-3 text-xs text-slate-300 overflow-x-auto mb-3">import google.generativeai as genai
+from ai_audit_logger import wrap
+
+genai.configure(api_key="your-gemini-key")
+model = wrap(genai.GenerativeModel("gemini-1.5-flash"))
+
+response = model.generate_content("Hello!")
+
+# Or direct HTTP (no SDK needed):
+# POST http://localhost:8000/proxy/gemini/v1beta/models/gemini-1.5-flash:generateContent</pre>
+      <div class="text-slate-500 text-xs">Proxy base: <span class="text-slate-300 copy-btn" onclick="copy(this)" data-val="http://localhost:8000/proxy/gemini">http://localhost:8000/proxy/gemini 📋</span></div>
+    </div>
+
+    <!-- Tag your calls -->
+    <div class="card rounded-lg p-5">
+      <div class="text-white font-semibold mb-3">Tag your calls (optional headers)</div>
+      <div class="text-slate-400 text-xs mb-3">Add these headers to any request to tag logs without touching your app code:</div>
+      <pre class="bg-slate-900 rounded p-3 text-xs text-slate-300 overflow-x-auto">x-app-name: my-chatbot
+x-user-id: user-123
+x-session-id: session-abc</pre>
+    </div>
+  </div>
+
+  <!-- ── SETTINGS TAB ──────────────────────────────────────────────── -->
+  <div id="page-settings" class="hidden p-6 max-w-2xl mx-auto space-y-6">
+
+    <!-- Security notice -->
+    <div class="rounded-lg p-4 border border-yellow-900/50 bg-yellow-900/10">
+      <div class="text-yellow-400 text-xs font-semibold mb-1">Security notice</div>
+      <div class="text-yellow-200/70 text-xs leading-relaxed">
+        Keys saved here are stored on <strong>your server only</strong> in a local config file.
+        They are never logged in the audit system and never sent to third parties.
+        For production deployments, prefer setting keys as environment variables
+        (<code>OPENAI_API_KEY</code>, <code>ANTHROPIC_API_KEY</code>, <code>GEMINI_API_KEY</code>).
+        Always use HTTPS in production.
+      </div>
+    </div>
+
+    <!-- Provider keys -->
+    <div id="provider-cards" class="space-y-4">
+      <div class="text-slate-500 text-xs">Loading...</div>
+    </div>
+
+    <!-- Slack alerts -->
+    <div class="card rounded-lg p-5">
+      <div class="text-white font-semibold mb-3">Slack Alerts</div>
+      <div class="text-slate-400 text-xs mb-4 leading-relaxed">
+        Get notified when a single call costs more than a threshold or hourly spend spikes.
+        Set <code class="text-slate-300">SLACK_WEBHOOK_URL</code> in your <code class="text-slate-300">.env</code> file and restart the server.
+      </div>
+      <pre class="bg-slate-900 rounded p-3 text-xs text-slate-300">SLACK_WEBHOOK_URL=https://hooks.slack.com/services/...
+ALERT_COST_PER_CALL=0.50
+ALERT_HOURLY_COST=5.00</pre>
+    </div>
+  </div>
+
   <!-- Detail Modal -->
   <div id="modal" class="hidden fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4" onclick="closeModal(event)">
     <div class="card rounded-lg p-6 max-w-2xl w-full max-h-[80vh] overflow-y-auto" onclick="event.stopPropagation()">
@@ -125,19 +273,33 @@
     </div>
   </div>
 
+  <div id="toast" class="hidden fixed bottom-4 right-4 bg-slate-700 text-white text-xs px-4 py-2 rounded shadow-lg z-50"></div>
+
   <script>
     let allEntries = [];
     let modelChart, costChart;
+    let currentTab = 'dashboard';
 
+    // ── Tab navigation ──────────────────────────────────────────────
+    function showTab(tab) {
+      ['dashboard', 'proxy', 'settings'].forEach(t => {
+        document.getElementById(`page-${t}`).classList.add('hidden');
+        document.getElementById(`tab-${t}`).className = 'py-3 text-xs font-semibold uppercase tracking-wider tab-inactive transition-colors';
+      });
+      document.getElementById(`page-${tab}`).classList.remove('hidden');
+      document.getElementById(`tab-${tab}`).className = 'py-3 text-xs font-semibold uppercase tracking-wider tab-active transition-colors';
+      currentTab = tab;
+      if (tab === 'settings') loadSettings();
+    }
+
+    // ── Dashboard ───────────────────────────────────────────────────
     async function fetchStats() {
       const r = await fetch('/api/v1/logs/stats');
       const data = await r.json();
-
       document.getElementById('stat-calls').textContent = data.total_calls.toLocaleString();
       document.getElementById('stat-cost').textContent = '$' + data.total_cost_usd.toFixed(4);
       document.getElementById('stat-latency').textContent = Math.round(data.avg_latency_ms) + 'ms';
       document.getElementById('stat-tokens').textContent = (data.total_tokens_in + data.total_tokens_out).toLocaleString();
-
       renderCharts(data.by_model);
     }
 
@@ -154,24 +316,26 @@
       const model = document.getElementById('filter-model').value.toLowerCase();
       const user = document.getElementById('filter-user').value.toLowerCase();
       const app = document.getElementById('filter-app').value.toLowerCase();
-
       const filtered = allEntries.filter(e =>
         (!provider || e.provider === provider) &&
         (!model || (e.model || '').toLowerCase().includes(model)) &&
         (!user || (e.user_id || '').toLowerCase().includes(user)) &&
         (!app || (e.app_name || '').toLowerCase().includes(app))
       );
-
       document.getElementById('filter-count').textContent = filtered.length + ' entries';
       renderTable(filtered);
     }
 
     function clearFilters() {
-      document.getElementById('filter-provider').value = '';
-      document.getElementById('filter-model').value = '';
-      document.getElementById('filter-user').value = '';
-      document.getElementById('filter-app').value = '';
+      ['filter-provider', 'filter-model', 'filter-user', 'filter-app'].forEach(id => {
+        const el = document.getElementById(id);
+        el.tagName === 'SELECT' ? (el.value = '') : (el.value = '');
+      });
       applyFilters();
+    }
+
+    function providerBadgeClass(p) {
+      return p === 'openai' ? 'badge-openai' : p === 'anthropic' ? 'badge-anthropic' : p === 'gemini' ? 'badge-gemini' : 'badge-other';
     }
 
     function renderTable(entries) {
@@ -180,38 +344,33 @@
         tbody.innerHTML = '<tr><td colspan="8" class="px-4 py-8 text-center text-slate-600">No entries found</td></tr>';
         return;
       }
-
       tbody.innerHTML = entries.map(e => {
         const ts = e.timestamp.slice(0, 19).replace('T', ' ');
         const cost = e.cost_usd != null ? '$' + e.cost_usd.toFixed(5) : '—';
         const latency = e.latency_ms != null ? Math.round(e.latency_ms) + 'ms' : '—';
         const tokens = (e.tokens_in || 0) + ' → ' + (e.tokens_out || 0);
-        const providerClass = e.provider === 'openai' ? 'badge-openai' : e.provider === 'anthropic' ? 'badge-anthropic' : 'badge-other';
-        const statusClass = e.error ? 'badge-error' : 'badge-ok';
-        const statusText = e.error ? 'ERROR' : 'OK';
-
+        const pc = providerBadgeClass(e.provider);
+        const sc = e.error ? 'badge-error' : 'badge-ok';
         return `<tr class="border-b border-slate-800/50 hover:bg-slate-800/30 cursor-pointer transition-colors" onclick='showDetail(${JSON.stringify(e).replace(/'/g, "&#39;")})'>
           <td class="px-4 py-2 text-slate-400">${ts}</td>
-          <td class="px-4 py-2"><span class="px-2 py-0.5 rounded text-xs ${providerClass}">${e.provider}</span></td>
+          <td class="px-4 py-2"><span class="px-2 py-0.5 rounded text-xs ${pc}">${e.provider}</span></td>
           <td class="px-4 py-2 text-slate-300">${e.model}</td>
           <td class="px-4 py-2 text-slate-500">${e.user_id || '—'}</td>
           <td class="px-4 py-2 text-right text-slate-400">${tokens}</td>
           <td class="px-4 py-2 text-right text-green-400">${cost}</td>
           <td class="px-4 py-2 text-right text-blue-400">${latency}</td>
-          <td class="px-4 py-2 text-center"><span class="px-2 py-0.5 rounded text-xs ${statusClass}">${statusText}</span></td>
+          <td class="px-4 py-2 text-center"><span class="px-2 py-0.5 rounded text-xs ${sc}">${e.error ? 'ERROR' : 'OK'}</span></td>
         </tr>`;
       }).join('');
     }
 
     function renderCharts(byModel) {
-      const labels = byModel.map(m => m.model.length > 20 ? m.model.slice(0, 20) + '…' : m.model);
+      const labels = byModel.map(m => m.model.length > 22 ? m.model.slice(0, 22) + '…' : m.model);
       const calls = byModel.map(m => m.calls);
       const costs = byModel.map(m => m.cost_usd);
-      const colors = ['#10a37f', '#e8945a', '#818cf8', '#facc15', '#f87171', '#38bdf8'];
-
+      const colors = ['#10a37f', '#e8945a', '#74a8ff', '#facc15', '#f87171', '#38bdf8', '#a78bfa'];
       if (modelChart) modelChart.destroy();
       if (costChart) costChart.destroy();
-
       const opts = {
         responsive: true,
         plugins: { legend: { display: false } },
@@ -220,59 +379,105 @@
           y: { ticks: { color: '#64748b', font: { size: 10 } }, grid: { color: '#1e293b' } }
         }
       };
-
       modelChart = new Chart(document.getElementById('chart-models'), {
-        type: 'bar',
-        data: { labels, datasets: [{ data: calls, backgroundColor: colors, borderRadius: 4 }] },
-        options: { ...opts, plugins: { ...opts.plugins } }
+        type: 'bar', data: { labels, datasets: [{ data: calls, backgroundColor: colors, borderRadius: 4 }] }, options: opts
       });
-
       costChart = new Chart(document.getElementById('chart-cost'), {
-        type: 'bar',
-        data: { labels, datasets: [{ data: costs, backgroundColor: colors.map(c => c + '99'), borderRadius: 4 }] },
-        options: { ...opts, plugins: { ...opts.plugins } }
+        type: 'bar', data: { labels, datasets: [{ data: costs, backgroundColor: colors.map(c => c + '99'), borderRadius: 4 }] }, options: opts
       });
     }
 
     function showDetail(entry) {
-      const modal = document.getElementById('modal');
       const content = document.getElementById('modal-content');
-
       const rows = [
-        ['ID', entry.id],
-        ['Timestamp', entry.timestamp],
-        ['Provider', entry.provider],
-        ['Model', entry.model],
-        ['App', entry.app_name || '—'],
-        ['User', entry.user_id || '—'],
-        ['Session', entry.session_id || '—'],
-        ['Tokens In', entry.tokens_in ?? '—'],
+        ['ID', entry.id], ['Timestamp', entry.timestamp], ['Provider', entry.provider],
+        ['Model', entry.model], ['App', entry.app_name || '—'], ['User', entry.user_id || '—'],
+        ['Session', entry.session_id || '—'], ['Tokens In', entry.tokens_in ?? '—'],
         ['Tokens Out', entry.tokens_out ?? '—'],
         ['Cost', entry.cost_usd != null ? '$' + entry.cost_usd.toFixed(6) : '—'],
         ['Latency', entry.latency_ms != null ? Math.round(entry.latency_ms) + 'ms' : '—'],
         ['Error', entry.error || null],
       ].filter(([, v]) => v !== null);
-
-      content.innerHTML = rows.map(([k, v]) => `
-        <div class="flex gap-4">
-          <span class="text-slate-500 w-24 shrink-0">${k}</span>
-          <span class="text-slate-300 break-all">${v}</span>
-        </div>`).join('');
-
-      if (entry.prompt) {
-        content.innerHTML += `<div class="mt-3"><div class="text-slate-500 mb-1">Prompt</div><pre class="bg-slate-900 rounded p-3 text-xs text-slate-300 overflow-x-auto whitespace-pre-wrap">${escapeHtml(entry.prompt)}</pre></div>`;
-      }
-      if (entry.response) {
-        content.innerHTML += `<div class="mt-3"><div class="text-slate-500 mb-1">Response</div><pre class="bg-slate-900 rounded p-3 text-xs text-slate-300 overflow-x-auto whitespace-pre-wrap">${escapeHtml(entry.response)}</pre></div>`;
-      }
-
-      modal.classList.remove('hidden');
+      content.innerHTML = rows.map(([k, v]) =>
+        `<div class="flex gap-4"><span class="text-slate-500 w-24 shrink-0">${k}</span><span class="text-slate-300 break-all">${v}</span></div>`
+      ).join('');
+      if (entry.prompt) content.innerHTML += `<div class="mt-3"><div class="text-slate-500 mb-1">Prompt</div><pre class="bg-slate-900 rounded p-3 text-xs text-slate-300 overflow-x-auto whitespace-pre-wrap">${escapeHtml(entry.prompt)}</pre></div>`;
+      if (entry.response) content.innerHTML += `<div class="mt-3"><div class="text-slate-500 mb-1">Response</div><pre class="bg-slate-900 rounded p-3 text-xs text-slate-300 overflow-x-auto whitespace-pre-wrap">${escapeHtml(entry.response)}</pre></div>`;
+      document.getElementById('modal').classList.remove('hidden');
     }
 
     function closeModal(e) {
-      if (e.target === document.getElementById('modal')) {
-        document.getElementById('modal').classList.add('hidden');
-      }
+      if (e.target === document.getElementById('modal')) document.getElementById('modal').classList.add('hidden');
+    }
+
+    // ── Settings ────────────────────────────────────────────────────
+    const PROVIDER_INFO = {
+      openai:    { label: 'OpenAI',    badge: 'badge-openai',    placeholder: 'sk-...',       env: 'OPENAI_API_KEY' },
+      anthropic: { label: 'Anthropic', badge: 'badge-anthropic', placeholder: 'sk-ant-...',   env: 'ANTHROPIC_API_KEY' },
+      gemini:    { label: 'Google Gemini', badge: 'badge-gemini', placeholder: 'AIza...', env: 'GEMINI_API_KEY' },
+    };
+
+    async function loadSettings() {
+      const r = await fetch('/api/v1/settings/providers');
+      const data = await r.json();
+      const container = document.getElementById('provider-cards');
+      container.innerHTML = Object.entries(PROVIDER_INFO).map(([provider, info]) => {
+        const status = data[provider] || {};
+        const isConfigured = status.configured;
+        const source = status.source;
+        const masked = status.masked || '';
+        return `
+        <div class="card rounded-lg p-5">
+          <div class="flex items-center justify-between mb-3">
+            <div class="flex items-center gap-2">
+              <span class="px-2 py-0.5 rounded text-xs ${info.badge}">${info.label}</span>
+              ${isConfigured
+                ? `<span class="text-green-400 text-xs">✓ Configured ${source === 'env' ? '(env var)' : '(dashboard)'} · ${masked}</span>`
+                : `<span class="text-slate-500 text-xs">Not configured</span>`}
+            </div>
+            ${isConfigured && source !== 'env' ? `<button onclick="removeKey('${provider}')" class="text-xs text-red-400/60 hover:text-red-400 transition-colors">Remove</button>` : ''}
+          </div>
+          ${source === 'env'
+            ? `<div class="text-slate-500 text-xs">Key loaded from environment variable <code class="text-slate-400">${info.env}</code>. To change it, update your <code class="text-slate-400">.env</code> file and restart.</div>`
+            : `<div class="flex gap-2">
+                <input type="password" id="key-${provider}" placeholder="${info.placeholder}" class="flex-1" />
+                <button onclick="saveKey('${provider}')" class="px-3 py-1 rounded bg-indigo-600 hover:bg-indigo-500 text-white text-xs transition-colors">Save</button>
+               </div>
+               <div class="text-slate-600 text-xs mt-2">Or set env var: <code>${info.env}=your-key</code></div>`}
+        </div>`;
+      }).join('');
+    }
+
+    async function saveKey(provider) {
+      const key = document.getElementById(`key-${provider}`).value.trim();
+      if (!key) { toast('Enter a key first'); return; }
+      const r = await fetch('/api/v1/settings/providers', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ provider, key }),
+      });
+      if (r.ok) { toast(`${provider} key saved`); loadSettings(); }
+      else { toast('Error saving key'); }
+    }
+
+    async function removeKey(provider) {
+      if (!confirm(`Remove ${provider} key?`)) return;
+      await fetch(`/api/v1/settings/providers/${provider}`, { method: 'DELETE' });
+      toast(`${provider} key removed`);
+      loadSettings();
+    }
+
+    // ── Utilities ───────────────────────────────────────────────────
+    function copy(el) {
+      navigator.clipboard.writeText(el.dataset.val);
+      toast('Copied!');
+    }
+
+    function toast(msg) {
+      const el = document.getElementById('toast');
+      el.textContent = msg;
+      el.classList.remove('hidden');
+      setTimeout(() => el.classList.add('hidden'), 2000);
     }
 
     function escapeHtml(str) {
@@ -280,11 +485,14 @@
     }
 
     async function refresh() {
-      await Promise.all([fetchStats(), fetchLogs()]);
+      if (currentTab === 'dashboard') await Promise.all([fetchStats(), fetchLogs()]);
+      if (currentTab === 'settings') await loadSettings();
     }
 
-    refresh();
-    setInterval(refresh, 15000);
+    // Init
+    fetchStats();
+    fetchLogs();
+    setInterval(() => { if (currentTab === 'dashboard') refresh(); }, 15000);
   </script>
 </body>
 </html>
