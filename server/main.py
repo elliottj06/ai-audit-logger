@@ -1,8 +1,14 @@
 from fastapi import FastAPI
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 from server.routes import ingest, query
 from server.db import init_db
+import os
 
 app = FastAPI(title="AI Audit Logger", version="0.1.0")
+
+static_dir = os.path.join(os.path.dirname(__file__), "static")
+app.mount("/static", StaticFiles(directory=static_dir), name="static")
 
 
 @app.on_event("startup")
@@ -13,6 +19,11 @@ def startup():
 @app.get("/health")
 def health():
     return {"status": "ok"}
+
+
+@app.get("/")
+def dashboard():
+    return FileResponse(os.path.join(static_dir, "index.html"))
 
 
 app.include_router(ingest.router)
