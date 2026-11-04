@@ -21,6 +21,9 @@ services:
       - "8000:8000"
     environment:
       DATABASE_URL: postgresql+psycopg2://postgres:postgres@db:5432/ai_audit
+      SLACK_WEBHOOK_URL: ${SLACK_WEBHOOK_URL:-}
+      ALERT_COST_PER_CALL: ${ALERT_COST_PER_CALL:-0.50}
+      ALERT_HOURLY_COST: ${ALERT_HOURLY_COST:-5.00}
     depends_on:
       db:
         condition: service_healthy

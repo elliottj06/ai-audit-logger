@@ -46,4 +46,8 @@ def create_log(entry: LogEntryCreate, db: Session = Depends(get_db)):
     db.add(db_entry)
     db.commit()
     db.refresh(db_entry)
+
+    from server.alerts import check_alerts
+    check_alerts(db, db_entry)
+
     return {"id": str(db_entry.id)}

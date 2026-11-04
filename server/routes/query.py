@@ -1,4 +1,7 @@
+import csv
+import io
 from fastapi import APIRouter, Depends, Query
+from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 from sqlalchemy import desc, func
 from typing import Optional
@@ -91,3 +94,75 @@ def get_stats(db: Session = Depends(get_db)):
             for r in by_model
         ],
     }
+
+
+@router.get("/logs/export")
+def export_logs(
+    db: Session = Depends(get_db),
+    provider: Optional[str] = None,
+    model: Optional[str] = None,
+    user_id: Optional[str] = None,
+    app_name: Optional[str] = None,
+    session_id: Optional[str] = None,
+    format: str = Query("csv", pattern="^(csv|jsonl)$"),
+):
+    """Export logs as CSV or JSONL for compliance reporting."""
+    q = db.query(LogEntry)
+    if provider:
+        q = q.filter(LogEntry.provider == provider)
+    if model:
+        q = q.filter(LogEntry.model == model)
+    if user_id:
+        q = q.filter(LogEntry.user_id == user_id)
+    if app_name:
+        q = q.filter(LogEntry.app_name == app_name)
+    if session_id:
+        q = q.filter(LogEntry.session_id == session_id)
+
+    entries = q.order_by(desc(LogEntry.timestamp)).all()
+
+    if format == "jsonl":
+        import json
+
+        def generate_jsonl():
+            for e in entries:
+                yield json.dumps({
+                    "id": str(e.id),
+                    "timestamp": e.timestamp.isoformat(),
+                    "provider": e.provider,
+                    "model": e.model,
+                    "app_name": e.app_name,
+                    "user_id": e.user_id,
+                    "session_id": e.session_id,
+                    "tokens_in": e.tokens_in,
+                    "tokens_out": e.tokens_out,
+                    "cost_usd": e.cost_usd,
+                    "latency_ms": e.latency_ms,
+                    "error": e.error,
+                }) + "\n"
+
+        return StreamingResponse(
+            generate_jsonl(),
+            media_type="application/x-ndjson",
+            headers={"Content-Disposition": "attachment; filename=audit_log.jsonl"},
+        )
+
+    def generate_csv():
+        output = io.StringIO()
+        writer = csv.writer(output)
+        writer.writerow(["id", "timestamp", "provider", "model", "app_name", "user_id",
+                         "session_id", "tokens_in", "tokens_out", "cost_usd", "latency_ms", "error"])
+        yield output.getvalue()
+        for e in entries:
+            output = io.StringIO()
+            writer = csv.writer(output)
+            writer.writerow([str(e.id), e.timestamp.isoformat(), e.provider, e.model,
+                             e.app_name, e.user_id, e.session_id, e.tokens_in, e.tokens_out,
+                             e.cost_usd, e.latency_ms, e.error])
+            yield output.getvalue()
+
+    return StreamingResponse(
+        generate_csv(),
+        media_type="text/csv",
+        headers={"Content-Disposition": "attachment; filename=audit_log.csv"},
+    )
