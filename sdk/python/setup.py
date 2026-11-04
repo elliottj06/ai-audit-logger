@@ -1,7 +1,10 @@
 from setuptools import setup, find_packages
 import os
 
-readme = open(os.path.join(os.path.dirname(__file__), "../../README.md"), encoding="utf-8").read()
+try:
+    readme = open(os.path.join(os.path.dirname(__file__), "../../README.md"), encoding="utf-8").read()
+except FileNotFoundError:
+    readme = "Drop-in audit logging for LLM API calls (OpenAI, Anthropic)"
 
 setup(
     name="ai-audit-logger",
