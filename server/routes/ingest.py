@@ -4,8 +4,9 @@ from pydantic import BaseModel
 from typing import Optional, Any
 from server.db import get_db
 from server.models import LogEntry
+from server.auth import require_auth
 
-router = APIRouter(prefix="/api/v1")
+router = APIRouter(prefix="/api/v1", dependencies=[Depends(require_auth)])
 
 
 class LogEntryCreate(BaseModel):

@@ -1,8 +1,9 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from server.config_manager import get_all_status, set_provider_key, delete_provider_key
+from server.auth import require_auth
 
-router = APIRouter(prefix="/api/v1")
+router = APIRouter(prefix="/api/v1", dependencies=[Depends(require_auth)])
 
 ALLOWED_PROVIDERS = {"openai", "anthropic", "gemini"}
 

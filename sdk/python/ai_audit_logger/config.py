@@ -11,4 +11,5 @@ class AuditConfig:
     session_id: Optional[str] = None
     enabled: bool = field(default_factory=lambda: os.getenv("AUDIT_ENABLED", "true").lower() == "true")
     redact_prompts: bool = field(default_factory=lambda: os.getenv("AUDIT_REDACT_PROMPTS", "false").lower() == "true")
+    api_key: Optional[str] = field(default_factory=lambda: os.getenv("AUDIT_API_KEY"))
     timeout: float = 2.0

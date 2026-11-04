@@ -18,11 +18,12 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 
 from server.alerts import check_alerts
+from server.auth import require_auth
 from server.config_manager import get_provider_key
 from server.db import get_db
 from server.models import LogEntry
 
-router = APIRouter(prefix="/proxy")
+router = APIRouter(prefix="/proxy", dependencies=[Depends(require_auth)])
 
 # Cost per 1M tokens (input, output) in USD
 COST_TABLE = {

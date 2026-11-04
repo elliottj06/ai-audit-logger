@@ -387,12 +387,70 @@ ALERT_HOURLY_COST=5.00</pre>
     </div>
   </div>
 
+  <!-- Login screen -->
+  <div id="login-screen" class="hidden fixed inset-0 flex items-center justify-center z-50" style="background:#060911">
+    <div class="card p-8 w-full max-w-sm" style="box-shadow:0 24px 80px rgba(0,0,0,0.6)">
+      <div class="flex items-center gap-2 mb-6">
+        <div class="pulse-dot"></div>
+        <span class="text-white font-semibold">AI Audit Logger</span>
+      </div>
+      <div class="text-slate-400 text-sm mb-5">Enter your API key to continue.</div>
+      <div class="flex gap-2">
+        <input type="password" id="login-key" placeholder="Your API key…" style="flex:1" onkeydown="if(event.key==='Enter')doLogin()" />
+        <button onclick="doLogin()" class="btn btn-primary">Login</button>
+      </div>
+      <div id="login-error" class="text-red-400 text-xs mt-3 hidden">Incorrect key — try again.</div>
+      <p class="text-slate-700 text-xs mt-4">Set <code>API_KEY</code> in your <code>.env</code> file to enable auth.</p>
+    </div>
+  </div>
+
   <div id="toast"></div>
 
   <script>
     let allEntries = [];
     let modelChart, costChart;
     let currentTab = 'dashboard';
+    let _apiKey = localStorage.getItem('audit_api_key') || '';
+
+    // ── Auth ─────────────────────────────────────────────────────────
+    function authHeaders() {
+      return _apiKey ? { 'Authorization': `Bearer ${_apiKey}` } : {};
+    }
+
+    async function apiFetch(url, opts = {}) {
+      const res = await fetch(url, { ...opts, headers: { ...authHeaders(), ...(opts.headers||{}) } });
+      if (res.status === 401) { showLogin(); throw new Error('Unauthorized'); }
+      return res;
+    }
+
+    async function checkAuth() {
+      const r = await fetch('/api/v1/auth/status');
+      const { auth_required } = await r.json();
+      if (!auth_required) return; // open access
+      if (!_apiKey) { showLogin(); return; }
+      // validate stored key
+      const test = await fetch('/api/v1/logs/stats', { headers: authHeaders() });
+      if (test.status === 401) { _apiKey = ''; localStorage.removeItem('audit_api_key'); showLogin(); }
+    }
+
+    function showLogin() {
+      document.getElementById('login-screen').classList.remove('hidden');
+    }
+
+    async function doLogin() {
+      const key = document.getElementById('login-key').value.trim();
+      if (!key) return;
+      const test = await fetch('/api/v1/logs/stats', { headers: { 'Authorization': `Bearer ${key}` } });
+      if (test.ok) {
+        _apiKey = key;
+        localStorage.setItem('audit_api_key', key);
+        document.getElementById('login-screen').classList.add('hidden');
+        document.getElementById('login-error').classList.add('hidden');
+        refresh();
+      } else {
+        document.getElementById('login-error').classList.remove('hidden');
+      }
+    }
 
     // ── Tabs ────────────────────────────────────────────────────────
     function showTab(tab) {
@@ -408,7 +466,7 @@ ALERT_HOURLY_COST=5.00</pre>
 
     // ── Stats ───────────────────────────────────────────────────────
     async function fetchStats() {
-      const r = await fetch('/api/v1/logs/stats');
+      const r = await apiFetch('/api/v1/logs/stats');
       const d = await r.json();
       document.getElementById('stat-calls').textContent = d.total_calls.toLocaleString();
       document.getElementById('stat-cost').textContent = '$' + d.total_cost_usd.toFixed(4);
@@ -418,7 +476,7 @@ ALERT_HOURLY_COST=5.00</pre>
     }
 
     async function fetchLogs() {
-      const r = await fetch('/api/v1/logs?limit=200');
+      const r = await apiFetch('/api/v1/logs?limit=200');
       const d = await r.json();
       allEntries = d.entries;
       applyFilters();
@@ -550,7 +608,7 @@ ALERT_HOURLY_COST=5.00</pre>
     };
 
     async function loadSettings() {
-      const r = await fetch('/api/v1/settings/providers');
+      const r = await apiFetch('/api/v1/settings/providers');
       const data = await r.json();
       document.getElementById('provider-cards').innerHTML = Object.entries(PINFO).map(([p, info]) => {
         const s = data[p] || {};
@@ -578,7 +636,7 @@ ALERT_HOURLY_COST=5.00</pre>
     async function saveKey(p) {
       const key = document.getElementById(`key-${p}`).value.trim();
       if (!key) { toast('Enter a key first'); return; }
-      const r = await fetch('/api/v1/settings/providers', {
+      const r = await apiFetch('/api/v1/settings/providers', {
         method: 'POST',
         headers: {'Content-Type':'application/json'},
         body: JSON.stringify({provider:p, key}),
@@ -588,7 +646,7 @@ ALERT_HOURLY_COST=5.00</pre>
 
     async function removeKey(p) {
       if (!confirm(`Remove ${p} key?`)) return;
-      await fetch(`/api/v1/settings/providers/${p}`, {method:'DELETE'});
+      await apiFetch(`/api/v1/settings/providers/${p}`, {method:'DELETE'});
       toast(`${p} key removed`);
       loadSettings();
     }
@@ -616,8 +674,13 @@ ALERT_HOURLY_COST=5.00</pre>
       if (currentTab==='settings')  loadSettings();
     }
 
-    fetchStats();
-    fetchLogs();
+    async function init() {
+      await checkAuth();
+      fetchStats();
+      fetchLogs();
+    }
+
+    init();
     setInterval(()=>{ if(currentTab==='dashboard') refresh(); }, 15000);
   </script>
 </body>

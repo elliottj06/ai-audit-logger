@@ -17,9 +17,13 @@ class AuditClient:
 
     def _send(self, **kwargs):
         try:
+            headers = {}
+            if self.config.api_key:
+                headers["Authorization"] = f"Bearer {self.config.api_key}"
             self._http.post(
                 f"{self.config.server_url}/api/v1/log",
                 json=kwargs,
+                headers=headers,
                 timeout=self.config.timeout,
             )
         except Exception:
