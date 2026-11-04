@@ -171,12 +171,30 @@ ai-audit-logger/
 
 ## Roadmap
 
-- [ ] TypeScript / Node.js SDK
+### Core (open source)
+- [x] Python SDK — OpenAI, Anthropic, Gemini
 - [x] Web dashboard with cost charts
-- [ ] LangChain integration
+- [x] Proxy mode — zero code changes required
 - [x] Publish to PyPI (`pip install ai-audit-logger`)
+- [x] CSV / JSONL compliance export
+- [x] Slack cost spike alerts
+- [ ] TypeScript / Node.js SDK
+- [ ] LangChain integration
 - [ ] Tamper-evident log hashing for compliance exports
-- [ ] Slack / email alerts on cost spikes
+
+### Managed / Team tier (future paid product)
+The self-hosted version stays free forever. The managed tier is where the business lives —
+teams with 10+ engineers, compliance requirements, and a CTO asking "how much are we spending on AI?"
+
+- [ ] User auth (email/password + Google SSO)
+- [ ] Organisations and workspaces
+- [ ] Role-based access (admin, developer, viewer)
+- [ ] Per-user API key management
+- [ ] Usage limits and budgets per user
+- [ ] Stripe billing integration
+- [ ] Cloud-hosted, managed infrastructure
+
+> **Model inspiration:** Grafana, Metabase, PostHog — open core, free self-hosted, paid managed cloud.
 
 ---
 
