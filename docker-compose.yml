@@ -1,5 +1,3 @@
-version: "3.9"
-
 services:
   db:
     image: postgres:16-alpine
@@ -22,7 +20,7 @@ services:
     ports:
       - "8000:8000"
     environment:
-      DATABASE_URL: postgresql://postgres:postgres@db:5432/ai_audit
+      DATABASE_URL: postgresql+psycopg2://postgres:postgres@db:5432/ai_audit
     depends_on:
       db:
         condition: service_healthy
