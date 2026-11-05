@@ -176,9 +176,22 @@
     <div class="flex items-center gap-3">
       <div class="pulse-dot"></div>
       <span class="font-semibold text-white text-base tracking-tight">AI Audit Logger</span>
-      <span class="text-xs px-2 py-0.5 rounded-full text-indigo-400" style="background: rgba(99,102,241,0.1); border: 1px solid rgba(99,102,241,0.2);">v0.1.0</span>
+      <span class="text-xs px-2 py-0.5 rounded-full text-indigo-400" style="background: rgba(99,102,241,0.1); border: 1px solid rgba(99,102,241,0.2);">v0.1.1</span>
     </div>
-    <div class="flex items-center gap-3">
+    <div class="flex items-center gap-4">
+      <div id="budget-bar" class="hidden items-center gap-3">
+        <div class="text-slate-600 text-xs">Today</div>
+        <div class="w-24 h-1.5 rounded-full" style="background:rgba(99,102,241,0.1)">
+          <div id="budget-daily-fill" class="h-full rounded-full transition-all" style="width:0%;background:#6366f1"></div>
+        </div>
+        <div id="budget-daily-label" class="text-xs text-slate-500"></div>
+        <div class="text-slate-700 text-xs">|</div>
+        <div class="text-slate-600 text-xs">Month</div>
+        <div class="w-24 h-1.5 rounded-full" style="background:rgba(99,102,241,0.1)">
+          <div id="budget-monthly-fill" class="h-full rounded-full transition-all" style="width:0%;background:#6366f1"></div>
+        </div>
+        <div id="budget-monthly-label" class="text-xs text-slate-500"></div>
+      </div>
       <span id="last-updated" class="text-slate-500 text-xs"></span>
       <button onclick="refresh()" class="btn btn-ghost">↻ Refresh</button>
     </div>
@@ -237,6 +250,19 @@
       </div>
     </div>
 
+    <!-- Time series chart -->
+    <div class="card p-5">
+      <div class="flex items-center justify-between mb-4">
+        <div class="text-slate-400 text-xs font-semibold uppercase tracking-wider">Activity Over Time</div>
+        <div class="flex items-center gap-1">
+          <button onclick="setTsMetric('calls')"  id="ts-calls-btn"  class="preset-btn active">Calls</button>
+          <button onclick="setTsMetric('cost')"   id="ts-cost-btn"   class="preset-btn">Cost</button>
+          <button onclick="setTsMetric('tokens')" id="ts-tokens-btn" class="preset-btn">Tokens</button>
+        </div>
+      </div>
+      <canvas id="chart-timeseries" height="110"></canvas>
+    </div>
+
     <!-- Charts -->
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
       <div class="card p-5">
@@ -246,6 +272,42 @@
       <div class="card p-5">
         <div class="text-slate-400 text-xs font-semibold uppercase tracking-wider mb-4">Cost by Model (USD)</div>
         <canvas id="chart-cost" height="175"></canvas>
+      </div>
+    </div>
+
+    <!-- Top Users + Top Apps -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+      <div class="card overflow-hidden">
+        <div class="px-5 py-3" style="border-bottom:1px solid rgba(99,102,241,0.1)">
+          <span class="text-slate-400 text-xs font-semibold uppercase tracking-wider">Top Users</span>
+        </div>
+        <table class="w-full text-xs">
+          <thead><tr class="text-slate-600" style="border-bottom:1px solid rgba(99,102,241,0.08)">
+            <th class="text-left px-5 py-2">User</th>
+            <th class="text-right px-4 py-2">Calls</th>
+            <th class="text-right px-4 py-2">Cost</th>
+            <th class="text-right px-4 py-2">Avg Latency</th>
+          </tr></thead>
+          <tbody id="users-table-body">
+            <tr><td colspan="4" class="px-5 py-6 text-center text-slate-700">Loading…</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="card overflow-hidden">
+        <div class="px-5 py-3" style="border-bottom:1px solid rgba(99,102,241,0.1)">
+          <span class="text-slate-400 text-xs font-semibold uppercase tracking-wider">Top Apps</span>
+        </div>
+        <table class="w-full text-xs">
+          <thead><tr class="text-slate-600" style="border-bottom:1px solid rgba(99,102,241,0.08)">
+            <th class="text-left px-5 py-2">App</th>
+            <th class="text-right px-4 py-2">Calls</th>
+            <th class="text-right px-4 py-2">Cost</th>
+            <th class="text-right px-4 py-2">Avg Latency</th>
+          </tr></thead>
+          <tbody id="apps-table-body">
+            <tr><td colspan="4" class="px-5 py-6 text-center text-slate-700">Loading…</td></tr>
+          </tbody>
+        </table>
       </div>
     </div>
 
@@ -482,11 +544,13 @@ ALERT_HOURLY_COST=5.00</pre>
 
   <script>
     let allEntries = [];
-    let modelChart, costChart;
+    let modelChart, costChart, tsChart;
     let currentTab = 'dashboard';
     let _apiKey = localStorage.getItem('audit_api_key') || '';
     let currentPreset  = 'all';  // dashboard date range
     let currentSPreset = 'all';  // sessions date range
+    let tsMetric = 'calls';      // time series metric
+    let tsData   = [];           // cached timeseries points
 
     // ── Auth ─────────────────────────────────────────────────────────
     function authHeaders() {
@@ -552,7 +616,7 @@ ALERT_HOURLY_COST=5.00</pre>
       ['1h','24h','7d','30d','all'].forEach(x => {
         document.getElementById(`preset-${x}`).className = 'preset-btn' + (x === p ? ' active' : '');
       });
-      Promise.all([fetchStats(), fetchLogs()]);
+      Promise.all([fetchStats(), fetchLogs(), fetchTimeseries(), fetchBreakdowns()]);
     }
 
     function setSPreset(p) {
@@ -584,6 +648,124 @@ ALERT_HOURLY_COST=5.00</pre>
       allEntries = d.entries;
       applyFilters();
       document.getElementById('last-updated').textContent = new Date().toLocaleTimeString();
+    }
+
+    async function fetchTimeseries() {
+      const since = getSince(currentPreset);
+      const bucket = (currentPreset === '1h' || currentPreset === '24h') ? 'hour' : 'day';
+      const qs = since ? `&since=${encodeURIComponent(since)}` : '';
+      const r = await apiFetch(`/api/v1/logs/timeseries?bucket=${bucket}${qs}`);
+      const d = await r.json();
+      tsData = d.points;
+      renderTimeseries();
+    }
+
+    function setTsMetric(m) {
+      tsMetric = m;
+      ['calls','cost','tokens'].forEach(x => {
+        document.getElementById(`ts-${x}-btn`).className = 'preset-btn' + (x === m ? ' active' : '');
+      });
+      renderTimeseries();
+    }
+
+    function renderTimeseries() {
+      if (!tsData.length) return;
+      const labels = tsData.map(p => {
+        const d = new Date(p.time);
+        return (currentPreset === '1h' || currentPreset === '24h')
+          ? d.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})
+          : d.toLocaleDateString([], {month:'short', day:'numeric'});
+      });
+      const values = tsData.map(p =>
+        tsMetric === 'calls'  ? p.calls :
+        tsMetric === 'cost'   ? p.cost_usd :
+        p.tokens
+      );
+      const color = tsMetric === 'cost' ? '#10b981' : tsMetric === 'tokens' ? '#a855f7' : '#6366f1';
+
+      if (tsChart) tsChart.destroy();
+      tsChart = new Chart(document.getElementById('chart-timeseries'), {
+        type: 'line',
+        data: {
+          labels,
+          datasets: [{
+            data: values,
+            borderColor: color,
+            backgroundColor: color + '15',
+            borderWidth: 2,
+            fill: true,
+            tension: 0.4,
+            pointRadius: tsData.length > 48 ? 0 : 3,
+            pointHoverRadius: 5,
+          }]
+        },
+        options: {
+          responsive: true,
+          plugins: { legend: { display: false }, tooltip: {
+            backgroundColor: '#0d1225', borderColor: 'rgba(99,102,241,0.3)', borderWidth: 1,
+            titleColor: '#a5b4fc', bodyColor: '#94a3b8', padding: 10,
+            callbacks: {
+              label: ctx => tsMetric === 'cost' ? '$' + ctx.parsed.y.toFixed(5) : ctx.parsed.y.toLocaleString()
+            }
+          }},
+          scales: {
+            x: { ticks: { color: '#475569', font: { size: 10 }, maxTicksLimit: 12 }, grid: { color: 'rgba(99,102,241,0.05)' } },
+            y: { ticks: { color: '#475569', font: { size: 10 } }, grid: { color: 'rgba(99,102,241,0.05)' }, beginAtZero: true }
+          }
+        }
+      });
+    }
+
+    async function fetchBreakdowns() {
+      const since = getSince(currentPreset);
+      const qs = since ? `?since=${encodeURIComponent(since)}` : '';
+      const [ur, ar] = await Promise.all([
+        apiFetch(`/api/v1/logs/users${qs}`),
+        apiFetch(`/api/v1/logs/apps${qs}`),
+      ]);
+      const ud = await ur.json();
+      const ad = await ar.json();
+      renderBreakdownTable('users-table-body', ud.users, 'user_id');
+      renderBreakdownTable('apps-table-body',  ad.apps,  'app_name');
+    }
+
+    function renderBreakdownTable(tbodyId, rows, nameKey) {
+      const tbody = document.getElementById(tbodyId);
+      if (!rows.length) {
+        tbody.innerHTML = `<tr><td colspan="4" class="px-5 py-6 text-center text-slate-700">No data</td></tr>`;
+        return;
+      }
+      tbody.innerHTML = rows.slice(0, 10).map(r => `
+        <tr style="border-bottom:1px solid rgba(99,102,241,0.06)">
+          <td class="px-5 py-2.5 text-slate-300 font-mono text-xs">${escapeHtml(r[nameKey])}</td>
+          <td class="px-4 py-2.5 text-right text-slate-400 text-xs">${r.calls.toLocaleString()}</td>
+          <td class="px-4 py-2.5 text-right text-emerald-400 text-xs font-mono">$${r.total_cost_usd.toFixed(5)}</td>
+          <td class="px-4 py-2.5 text-right text-blue-400 text-xs font-mono">${Math.round(r.avg_latency_ms)}ms</td>
+        </tr>`).join('');
+    }
+
+    async function fetchBudget() {
+      try {
+        const r = await apiFetch('/api/v1/budget');
+        const d = await r.json();
+        const bar = document.getElementById('budget-bar');
+        if (d.daily.limit_usd || d.monthly.limit_usd) {
+          bar.classList.remove('hidden');
+          bar.classList.add('flex');
+        }
+        if (d.daily.limit_usd) {
+          const pct = Math.min(d.daily.pct || 0, 100);
+          document.getElementById('budget-daily-fill').style.width = pct + '%';
+          document.getElementById('budget-daily-fill').style.background = pct > 90 ? '#ef4444' : pct > 70 ? '#f59e0b' : '#6366f1';
+          document.getElementById('budget-daily-label').textContent = `$${d.daily.cost_usd.toFixed(2)} / $${d.daily.limit_usd.toFixed(2)}`;
+        }
+        if (d.monthly.limit_usd) {
+          const pct = Math.min(d.monthly.pct || 0, 100);
+          document.getElementById('budget-monthly-fill').style.width = pct + '%';
+          document.getElementById('budget-monthly-fill').style.background = pct > 90 ? '#ef4444' : pct > 70 ? '#f59e0b' : '#6366f1';
+          document.getElementById('budget-monthly-label').textContent = `$${d.monthly.cost_usd.toFixed(2)} / $${d.monthly.limit_usd.toFixed(2)}`;
+        }
+      } catch(_) {}
     }
 
     // ── Sessions ─────────────────────────────────────────────────────
@@ -866,15 +1048,14 @@ ALERT_HOURLY_COST=5.00</pre>
     }
 
     async function refresh() {
-      if (currentTab==='dashboard') await Promise.all([fetchStats(), fetchLogs()]);
+      if (currentTab==='dashboard') await Promise.all([fetchStats(), fetchLogs(), fetchTimeseries(), fetchBreakdowns(), fetchBudget()]);
       if (currentTab==='sessions')  fetchSessions();
       if (currentTab==='settings')  loadSettings();
     }
 
     async function init() {
       await checkAuth();
-      fetchStats();
-      fetchLogs();
+      Promise.all([fetchStats(), fetchLogs(), fetchTimeseries(), fetchBreakdowns(), fetchBudget()]);
     }
 
     init();

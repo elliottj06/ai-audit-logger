@@ -1,10 +1,11 @@
 import csv
 import io
+import os
 from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, Query, HTTPException
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
-from sqlalchemy import desc, func
+from sqlalchemy import desc, func, text
 from typing import Optional
 from server.db import get_db
 from server.models import LogEntry
@@ -183,6 +184,158 @@ def get_session_detail(session_id: str, db: Session = Depends(get_db)):
         "session_id": session_id,
         "calls": len(entries),
         "entries": [_entry_dict(e) for e in entries],
+    }
+
+
+@router.get("/logs/timeseries")
+def get_timeseries(
+    db: Session = Depends(get_db),
+    bucket: str = Query("hour", pattern="^(hour|day)$"),
+    provider: Optional[str] = None,
+    model: Optional[str] = None,
+    since: Optional[str] = None,
+    until: Optional[str] = None,
+):
+    """Returns call counts and cost bucketed by hour or day."""
+    q = _base_query(db, provider, model, None, None, None,
+                    _parse_dt(since), _parse_dt(until))
+    trunc = func.date_trunc(bucket, LogEntry.timestamp)
+    rows = (
+        q.with_entities(
+            trunc.label("bucket"),
+            func.count(LogEntry.id).label("calls"),
+            func.sum(LogEntry.cost_usd).label("cost"),
+            func.sum(LogEntry.tokens_in + LogEntry.tokens_out).label("tokens"),
+        )
+        .group_by(trunc)
+        .order_by(trunc)
+        .all()
+    )
+    return {
+        "bucket": bucket,
+        "points": [
+            {
+                "time": r.bucket.isoformat(),
+                "calls": r.calls,
+                "cost_usd": round(r.cost or 0, 6),
+                "tokens": r.tokens or 0,
+            }
+            for r in rows
+        ],
+    }
+
+
+@router.get("/logs/users")
+def get_users(
+    db: Session = Depends(get_db),
+    limit: int = Query(50, le=200),
+    since: Optional[str] = None,
+    until: Optional[str] = None,
+):
+    """Top users by call count with aggregated stats."""
+    q = db.query(
+        LogEntry.user_id,
+        func.count(LogEntry.id).label("calls"),
+        func.sum(LogEntry.cost_usd).label("total_cost"),
+        func.sum(LogEntry.tokens_in).label("tokens_in"),
+        func.sum(LogEntry.tokens_out).label("tokens_out"),
+        func.avg(LogEntry.latency_ms).label("avg_latency"),
+        func.max(LogEntry.timestamp).label("last_call"),
+    ).filter(LogEntry.user_id.isnot(None))
+    if since: q = q.filter(LogEntry.timestamp >= _parse_dt(since))
+    if until: q = q.filter(LogEntry.timestamp <= _parse_dt(until))
+    rows = (
+        q.group_by(LogEntry.user_id)
+        .order_by(desc(func.count(LogEntry.id)))
+        .limit(limit)
+        .all()
+    )
+    return {
+        "users": [
+            {
+                "user_id": r.user_id,
+                "calls": r.calls,
+                "total_cost_usd": round(r.total_cost or 0, 6),
+                "tokens_in": r.tokens_in or 0,
+                "tokens_out": r.tokens_out or 0,
+                "avg_latency_ms": round(r.avg_latency or 0, 1),
+                "last_call": r.last_call.isoformat(),
+            }
+            for r in rows
+        ]
+    }
+
+
+@router.get("/logs/apps")
+def get_apps(
+    db: Session = Depends(get_db),
+    limit: int = Query(50, le=200),
+    since: Optional[str] = None,
+    until: Optional[str] = None,
+):
+    """Top apps by call count with aggregated stats."""
+    q = db.query(
+        LogEntry.app_name,
+        func.count(LogEntry.id).label("calls"),
+        func.sum(LogEntry.cost_usd).label("total_cost"),
+        func.sum(LogEntry.tokens_in).label("tokens_in"),
+        func.sum(LogEntry.tokens_out).label("tokens_out"),
+        func.avg(LogEntry.latency_ms).label("avg_latency"),
+        func.max(LogEntry.timestamp).label("last_call"),
+    ).filter(LogEntry.app_name.isnot(None))
+    if since: q = q.filter(LogEntry.timestamp >= _parse_dt(since))
+    if until: q = q.filter(LogEntry.timestamp <= _parse_dt(until))
+    rows = (
+        q.group_by(LogEntry.app_name)
+        .order_by(desc(func.count(LogEntry.id)))
+        .limit(limit)
+        .all()
+    )
+    return {
+        "apps": [
+            {
+                "app_name": r.app_name,
+                "calls": r.calls,
+                "total_cost_usd": round(r.total_cost or 0, 6),
+                "tokens_in": r.tokens_in or 0,
+                "tokens_out": r.tokens_out or 0,
+                "avg_latency_ms": round(r.avg_latency or 0, 1),
+                "last_call": r.last_call.isoformat(),
+            }
+            for r in rows
+        ]
+    }
+
+
+@router.get("/budget")
+def get_budget(db: Session = Depends(get_db)):
+    """Daily and monthly spend vs configured limits."""
+    from datetime import date, timedelta
+    daily_limit   = float(os.getenv("BUDGET_DAILY_USD",   "0") or 0)
+    monthly_limit = float(os.getenv("BUDGET_MONTHLY_USD", "0") or 0)
+
+    today = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
+    month_start = today.replace(day=1)
+
+    daily_cost = db.query(func.sum(LogEntry.cost_usd)).filter(
+        LogEntry.timestamp >= today
+    ).scalar() or 0
+
+    monthly_cost = db.query(func.sum(LogEntry.cost_usd)).filter(
+        LogEntry.timestamp >= month_start
+    ).scalar() or 0
+
+    return {
+        "daily": {
+            "cost_usd": round(daily_cost, 6),
+            "limit_usd": daily_limit,
+            "pct": round(daily_cost / daily_limit * 100, 1) if daily_limit else None,
+        },
+        "monthly": {
+            "cost_usd": round(monthly_cost, 6),
+            "limit_usd": monthly_limit,
+            "pct": round(monthly_cost / monthly_limit * 100, 1) if monthly_limit else None,
+        },
     }
 
 
